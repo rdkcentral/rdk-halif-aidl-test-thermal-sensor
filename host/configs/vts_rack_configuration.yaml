@@ -1,0 +1,80 @@
+#** *****************************************************************************
+# *
+# * If not stated otherwise in this file or this component's LICENSE file the
+# * following copyright and licenses apply:
+# *
+# * Copyright 2026 RDK Management
+# *
+# * Licensed under the Apache License, Version 2.0 (the "License");
+# * you may not use this file except in compliance with the License.
+# * You may obtain a copy of the License at
+# *
+# * http://www.apache.org/licenses/LICENSE-2.0
+# *
+# * Unless required by applicable law or agreed to in writing, software
+# * distributed under the License is distributed on an "AS IS" BASIS,
+# * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+# * See the License for the specific language governing permissions and
+# * limitations under the License.
+# *
+#** ******************************************************************************
+
+# This config file creates your environment, defaults are setup internally unless
+# otherwise overridden. You will need at least 1 rack and 1 slot to operate.
+
+# Data that is global to all tests.
+globalConfig:
+    includes:
+        deviceConfig: "vts_device_configuration.yaml"
+    local:
+        log:
+            directory: "./logs"
+            delimiter: "/"
+
+# Define racks, their slots and the devices in them.
+rackConfig:
+    rack1:
+        name: "rack1"
+        description: "thermal sensor test rack"
+        slot1:
+            name: "slot1"
+            devices:
+                - dut:
+                    ip: "127.0.0.1"
+                    description: "VTV"
+                    platform: "vDevice"
+                    consoles:
+                        - default:
+                            type: "ssh"
+                            port: 5522
+                            username: ""
+                            ip: ""      # IP address of the target device
+                            password: ""
+                            prompt: "~#"
+                        - ssh_hal_test:
+                            type: "ssh"
+                            port: 5522
+                            username: ""
+                            ip: ""      # IP address of the target device
+                            password: ""
+                            prompt: "~#"
+                        - ssh_hal_test_1:
+                            type: "ssh"
+                            port: 5522
+                            username: ""
+                            ip: ""      # IP address of the target device (vcomponent session)
+                            password: ""
+                            prompt: "~#"
+                    thermalSensorController:
+                        type: virtual-thermalsensor-client
+                        vendor: "vComponent"
+                        address: "127.0.0.1" # IP address of the target device
+                        username: ""         # Login username
+                        password: ''         # Login password
+                        port: 5522
+                        control_port: 8080
+                    outbound:
+                        download_url: "tftp://tftp-server.com/rack1/slot1/"
+                        upload_url: "sftp://server-address/home/workspace/tftp/rack1/slot1/"
+                        upload_url_base_dir: "sftp://server-address/home/workspace/tftp/rack1/slot1"
+                        httpProxy:
