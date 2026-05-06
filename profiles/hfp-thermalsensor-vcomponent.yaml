@@ -90,7 +90,7 @@ sensor:
 
       vendor:
         vendorCode: 1001  # Used in com.rdk.hal.sensor.thermal/TemperatureReading.aidl
-        vendorInfo: "Primary die sensor used for critical trip points." # Used in com.rdk.hal.sensor.thermal/TemperatureReading.aidl
+        vendorInfo: "Primary die sensor used for critical trip points."
 
     - id: "board"
       sensorName: "Mainboard Ambient" # Used in com.rdk.hal.sensor.thermal/TemperatureReading.aidl
@@ -122,4 +122,4 @@ sensor:
 
       vendor:
         vendorCode: 1002  # Used in com.rdk.hal.sensor.thermal/TemperatureReading.aidl
-        vendorInfo: "Used for general system thermal monitoring."
+        vendorInfo: "Board ambient temperature sensor."

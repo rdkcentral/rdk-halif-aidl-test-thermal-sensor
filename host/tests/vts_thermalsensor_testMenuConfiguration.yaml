@@ -31,17 +31,9 @@ thermalsensor:
             0:
                 name: "VTS_L1_THERMALSENSOR"
                 tests:
-                    - "RegisterEventListener_Positive"
-                    - "RegisterEventListener_Negative_NullListener"
-                    - "RegisterEventListener_Negative_AlreadyRegistered"
-                    - "UnregisterEventListener_Positive"
-                    - "UnregisterEventListener_Negative_NotRegistered"
-                    - "UnregisterEventListener_Negative_Null"
-                    - "GetCurrentThermalState_Positive"
-                    - "GetCurrentThermalState_MultipleCallsConsistent"
-                    - "GetCurrentTemperatures_Positive"
-                    - "GetCurrentTemperatures_StructureValid"
-                    - "GetCurrentTemperatures_MatchProfile"
+                    - "RegisterUnregisterEventListener"
+                    - "GetCurrentThermalState_ValidStateAndHFPConsistency"
+                    - "GetCurrentTemperatures_CountStructureAndProfileMatch"
             1:
                 name: "VTS_L2_THERMALSENSOR"
                 tests:

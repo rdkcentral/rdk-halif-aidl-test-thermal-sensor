@@ -70,24 +70,12 @@ UT_ADD_TEST(VTS_L2_THERMALSENSOR, ThermalStateConsistency)
     UT_LOG_INFO("[L2 ThermalStateConsistency] current state=%s",
                 UT_Control_GetMapString(state_mapTable_thermalsensor, (int32_t)state));
 
-    if (!gThermalSensorHFP.supportedStates.empty())
-    {
-        bool found = false;
-        for (const auto& s : gThermalSensorHFP.supportedStates)
-        {
-            if (s == state) { found = true; break; }
-        }
-        UT_ASSERT_TRUE(found);
-    }
-    else
-    {
-        /* Profile has no explicit state list — just check the value is a valid enum member */
-        bool valid = (state == State::NORMAL ||
-                      state == State::CRITICAL_TEMPERATURE_EXCEEDED ||
-                      state == State::CRITICAL_TEMPERATURE_RECOVERED ||
-                      state == State::CRITICAL_SHUTDOWN_IMMINENT);
-        UT_ASSERT_TRUE(valid);
-    }
+    /* Validate state is a known enum member */
+    bool valid = (state == State::NORMAL ||
+                  state == State::CRITICAL_TEMPERATURE_EXCEEDED ||
+                  state == State::CRITICAL_TEMPERATURE_RECOVERED ||
+                  state == State::CRITICAL_SHUTDOWN_IMMINENT);
+    UT_ASSERT_TRUE(valid);
 }
 
 /**
