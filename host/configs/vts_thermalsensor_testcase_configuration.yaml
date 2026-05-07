@@ -33,7 +33,9 @@ thermalsensor:
     #######################################
     - name: "VTS_L1_THERMALSENSOR"
       test_cases:
-        - "RegisterUnregisterEventListener"
+        - "RegisterUnregisterEventListener_Positive"
+        - "RegisterUnregisterEventListener_MultipleListener"
+        - "RegisterUnregisterEventListener_Negative"
         - "GetCurrentThermalState_ValidStateAndHFPConsistency"
         - "GetCurrentTemperatures_CountStructureAndProfileMatch"
     - name: "VTS_L2_THERMALSENSOR"
