@@ -49,73 +49,48 @@ static void kvp_destroy_instance(void *instance)
     ut_kvp_destroyInstance((ut_kvp_instance_t*)instance);
 }
 
-UT_status_t vts_thermalsensor_parse_exceedrecovery_config(
+UT_status_t vts_thermalsensor_parse_l3_config(
     const char *configFile,
     const char *module,
     const char *testGroup,
     const char *testName,
-    thermalSensorL3ExceedRecoveryConfig_t& config)
+    thermalSensorL3Config_t& config)
 {
     ut_kvp_instance_t* kvp = (ut_kvp_instance_t*)kvp_create_instance(configFile);
     if (!kvp)
         return UT_STATUS_FAILURE;
 
-    const std::string node = std::string(module) + "." + testGroup + "." + testName;
+    /* Shared config lives at module.testGroup (e.g. thermalsensor.L3).
+     * testName is kept only for log messages. */
+    const std::string node = std::string(module) + "." + testGroup;
 
-    config.eventTimeoutMs            = (int32_t)ut_kvp_getUInt32Field(kvp, (node + ".event_timeout_ms").c_str());
-    config.criticalExceededCelsius   = ut_kvp_getDoubleField(kvp, (node + ".critical_temperature_exceeded_celsius").c_str());
-    config.criticalRecoveredCelsius  = ut_kvp_getDoubleField(kvp, (node + ".critical_temperature_recovered_celsius").c_str());
-    config.overTempCelsius           = ut_kvp_getDoubleField(kvp, (node + ".over_temp_celsius").c_str());
-    config.recoveryTempCelsius       = ut_kvp_getDoubleField(kvp, (node + ".recovery_temp_celsius").c_str());
-    config.normalTempCelsius         = ut_kvp_getDoubleField(kvp, (node + ".normal_temp_celsius").c_str());
-    ut_kvp_getStringField(kvp, (node + ".primary_sensor").c_str(),
-                          config.primarySensor, sizeof(config.primarySensor));
-    ut_kvp_getStringField(kvp, (node + ".secondary_sensor").c_str(),
-                          config.secondarySensor, sizeof(config.secondarySensor));
-
-    UT_LOG_INFO("[THERMALSENSOR_TESTCONFIG] %s: exceeded=%.1f recovered=%.1f "
-                "overTemp=%.1f recoveryTemp=%.1f normalTemp=%.1f timeoutMs=%d "
-                "primarySensor=%s secondarySensor=%s",
-                testName, config.criticalExceededCelsius, config.criticalRecoveredCelsius,
-                config.overTempCelsius, config.recoveryTempCelsius, config.normalTempCelsius,
-                config.eventTimeoutMs, config.primarySensor, config.secondarySensor);
-
-    kvp_destroy_instance(kvp);
-    return UT_STATUS_OK;
-}
-
-UT_status_t vts_thermalsensor_parse_shutdown_config(
-    const char *configFile,
-    const char *module,
-    const char *testGroup,
-    const char *testName,
-    thermalSensorL3ShutdownConfig_t& config)
-{
-    ut_kvp_instance_t* kvp = (ut_kvp_instance_t*)kvp_create_instance(configFile);
-    if (!kvp)
-        return UT_STATUS_FAILURE;
-
-    const std::string node = std::string(module) + "." + testGroup + "." + testName;
-
-    config.eventTimeoutMs                   = (int32_t)ut_kvp_getUInt32Field(kvp, (node + ".event_timeout_ms").c_str());
-    config.suppressionTimeoutMs             = (int32_t)ut_kvp_getUInt32Field(kvp, (node + ".suppression_timeout_ms").c_str());
-    config.criticalExceededCelsius          = ut_kvp_getDoubleField(kvp, (node + ".critical_temperature_exceeded_celsius").c_str());
-    config.enteringCriticalShutdownCelsius  = ut_kvp_getDoubleField(kvp, (node + ".entering_critical_shutdown_celsius").c_str());
-    config.overTempCelsius                  = ut_kvp_getDoubleField(kvp, (node + ".over_temp_celsius").c_str());
-    config.shutdownTempCelsius              = ut_kvp_getDoubleField(kvp, (node + ".shutdown_temp_celsius").c_str());
-    config.recoveryTempCelsius              = ut_kvp_getDoubleField(kvp, (node + ".recovery_temp_celsius").c_str());
+    config.eventTimeoutMs      = (int32_t)ut_kvp_getUInt32Field(kvp, (node + ".event_timeout_ms").c_str());
+    config.suppressionTimeoutMs = (int32_t)ut_kvp_getUInt32Field(kvp, (node + ".suppression_timeout_ms").c_str());
     if (config.suppressionTimeoutMs <= 0) config.suppressionTimeoutMs = 5000;
-    ut_kvp_getStringField(kvp, (node + ".sensorName").c_str(),
-                          config.sensorName, sizeof(config.sensorName));
 
-    UT_LOG_INFO("[THERMALSENSOR_TESTCONFIG] %s: exceeded=%.1f shutdown=%.1f "
-                "overTemp=%.1f shutdownTemp=%.1f recoveryTemp=%.1f "
-                "timeoutMs=%d suppressionMs=%d sensor=%s",
-                testName, config.criticalExceededCelsius,
-                config.enteringCriticalShutdownCelsius,
-                config.overTempCelsius, config.shutdownTempCelsius,
-                config.recoveryTempCelsius, config.eventTimeoutMs,
-                config.suppressionTimeoutMs, config.sensorName);
+    /* Read the ordered transition_states list */
+    const std::string listKey = node + ".transition_states";
+    uint32_t count = ut_kvp_getListCount(kvp, listKey.c_str());
+    config.transitionStates.clear();
+    config.transitionStates.reserve(count);
+
+    char stateBuf[64];
+    for (uint32_t i = 0; i < count; ++i)
+    {
+        const std::string itemKey = listKey + "." + std::to_string(i);
+        stateBuf[0] = '\0';
+        ut_kvp_getStringField(kvp, itemKey.c_str(), stateBuf, sizeof(stateBuf));
+        config.transitionStates.emplace_back(stateBuf);
+    }
+
+    UT_LOG_INFO("[THERMALSENSOR_TESTCONFIG] %s: timeoutMs=%d suppressionMs=%d transitions=%u [%s]",
+                testName, config.eventTimeoutMs, config.suppressionTimeoutMs, count,
+                [&]() -> std::string {
+                    std::string s;
+                    for (const auto& st : config.transitionStates)
+                        s += (s.empty() ? "" : "->") + st;
+                    return s;
+                }().c_str());
 
     kvp_destroy_instance(kvp);
     return UT_STATUS_OK;

@@ -18,74 +18,15 @@
 # * limitations under the License.
 # *
 #** ******************************************************************************
-#
 # vts_l3_ThermalSensor.yaml
-#
-# L3 test configuration for Thermal Sensor end-to-end tests.
-#
-# ARCHITECTURE OVERVIEW
-# ─────────────────────
-# The C++ test binary (vts_thermalsensor_hal_test) and the Python host scripts
-# both read this file.  The binary parses it at runtime via the parse_testconfig
-# helpers; the Python host reads it to determine which temperatures to inject and
-# how long to wait between phases.
-#
-# TIMEOUT FIELDS EXPLAINED
-# ────────────────────────
-# event_timeout_ms
-#   Maximum milliseconds the C++ binary will block in
-#   ThermalSensorEventListener::getNextEvent() waiting for a single
-#   state-change event to arrive.  If no event arrives within this window
-#   the wait returns false and the test assertion fails.
-#   → Visible in logs as: "getNextEvent (timeout=<N>ms) ... timed out after <N>ms"
-#   → Set this to at least: (Python inter-phase delay) + (vcomponent dispatch
-#     latency) + (binder round-trip) with a comfortable margin (≥ 10 s recommended).
-#
-# suppression_timeout_ms   [CriticalShutdownWithSuppression only]
-#   Milliseconds the C++ binary waits to confirm that NO event arrives after
-#   the vcomponent should have suppressed a state transition.  A shorter value
-#   makes the suppression check faster; too short risks a false pass if the
-#   vcomponent is merely slow.  5000 ms is the recommended minimum.
-#
-# PYTHON HOST TIMING
-# ──────────────────
-# The Python trigger callable injects temperature updates in phases separated
-# by INTER_PHASE_DELAY_S (2 s).  The C++ binary starts waiting for the next
-# event before the Python injection occurs; the event_timeout_ms window must
-# therefore be larger than the Python delay plus any system latency.
-#
+#** ******************************************************************************
 
 thermalsensor:
   L3:
-    # -----------------------------------------------------------------------
-    # ThermalExceedRecoveryLifecycle (TC1)
-    # Host injects raw temperatures via TEMPERATURE_UPDATE commands.
-    # Full lifecycle: NORMAL → EXCEEDED → RECOVERED → NORMAL.
-    # Validates: event delivery, monotonic timestamps, multi-sensor aggregation,
-    # idempotent injection (no duplicate events), dual-listener receipt.
-    # -----------------------------------------------------------------------
-    ThermalExceedRecoveryLifecycle:
-      primary_sensor: "SoC Die"
-      secondary_sensor: "Mainboard Ambient"
-      critical_temperature_exceeded_celsius: 98.0
-      critical_temperature_recovered_celsius: 90.0
-      over_temp_celsius: 100.0
-      recovery_temp_celsius: 88.0
-      normal_temp_celsius: 50.0
-      event_timeout_ms: 15000
-
-    # -----------------------------------------------------------------------
-    # CriticalShutdownWithSuppression (TC2)
-    # Host injects raw temperatures via TEMPERATURE_UPDATE commands.
-    # Path: NORMAL → EXCEEDED → SHUTDOWN_IMMINENT; then recovery and normal
-    # injections must be suppressed (no events emitted after shutdown).
-    # -----------------------------------------------------------------------
-    CriticalShutdownWithSuppression:
-      sensorName: "SoC Die"
-      critical_temperature_exceeded_celsius: 98.0
-      entering_critical_shutdown_celsius: 115.0
-      over_temp_celsius: 100.0
-      shutdown_temp_celsius: 117.0
-      recovery_temp_celsius: 88.0
-      suppression_timeout_ms: 5000
-      event_timeout_ms: 15000
+    transition_states:
+        - NORMAL
+        - EXCEEDED
+        - RECOVERED
+        - NORMAL
+    event_timeout_ms: 15000
+    suppression_timeout_ms: 5000

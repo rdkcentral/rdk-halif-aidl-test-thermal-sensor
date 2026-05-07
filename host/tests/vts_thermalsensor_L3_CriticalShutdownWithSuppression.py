@@ -14,22 +14,20 @@
 """
 L3 test: CriticalShutdownWithSuppression (TC2)
 
-Validates that once CRITICAL_SHUTDOWN_IMMINENT is entered the vcomponent
-suppresses all subsequent state transitions, even when the temperature
-drops back into the recovery or normal range:
+Reads transition_states from the L3 YAML and all sensor thresholds from the
+HFP profile.  Drives each state transition in sequence:
 
-  Phase 1 : inject sensorName at overTempCelsius
-            -> CRITICAL_TEMPERATURE_EXCEEDED
-  Phase 2 : inject sensorName at shutdownTempCelsius (> enteringCriticalShutdown)
-            -> CRITICAL_SHUTDOWN_IMMINENT
-  Phase 3 : inject sensorName at recoveryTempCelsius
-            -> suppressed (no event expected within suppressionTimeoutMs)
-  Phase 4 : inject sensorName at a safe normal temperature
-            -> suppressed (no event expected within suppressionTimeoutMs)
+  States up to and including SHUTDOWN : inject temperature to trigger the event.
+  States after SHUTDOWN               : inject temperature that the vcomponent
+                                        must SUPPRESS (no event expected).
 
-The Python host sends TEMPERATURE_UPDATE commands via the vcomponent control-plane.
-The C++ binary verifies event delivery (phases 1 to 2) and absence of events
-(phases 3 to 4).
+Injection temperatures are derived per-sensor from the HFP profile:
+  EXCEEDED  -> exceeded + 2°C
+  SHUTDOWN  -> shutdown + 2°C
+  RECOVERED -> recovered - 2°C
+  NORMAL    -> midpoint of sensor_reading_range_celsius
+
+The primary sensor is the first sensor in the HFP profile.
 """
 
 import os
@@ -45,13 +43,12 @@ sys.path.append(os.path.join(dir_path, "..", "raft"))
 from raft.framework.core.logModule import logModule
 from vts_thermalsensor_helper import thermalSensorHelperClass
 
-# Seconds to wait between successive temperature injections
 INTER_PHASE_DELAY_S = 2.0
 
 
 class VTS_THERMALSENSOR_L3_CriticalShutdownWithSuppression(thermalSensorHelperClass):
     """
-    TC2: NORMAL -> EXCEEDED -> SHUTDOWN_IMMINENT; recovery and normal are suppressed.
+    TC2: driven by transition_states from YAML; temps derived from HFP profile.
     """
 
     def __init__(self, log: logModule = None):
@@ -59,19 +56,57 @@ class VTS_THERMALSENSOR_L3_CriticalShutdownWithSuppression(thermalSensorHelperCl
         qcId = "6"
         super().__init__(self.testName, qcId, log)
 
+    def _trigger(self, sensorName: str, transitionStates: list,
+                 stateToTemp: dict, suppressionMs: int):
+        """
+        Inject temperature updates for each state transition in sequence.
+
+        States up to and including SHUTDOWN fire the event normally.
+        States after SHUTDOWN are injected but the vcomponent must suppress them.
+
+        Args:
+            sensorName (str): Name of the primary sensor to inject.
+            transitionStates (list): Ordered state list from the YAML config.
+            stateToTemp (dict): Maps state name -> injection temperature (°C).
+            suppressionMs (int): suppression_timeout_ms from the YAML config.
+        """
+        inShutdown = False
+        prevState  = transitionStates[0] if transitionStates else 'NORMAL'
+
+        for state in transitionStates[1:]:
+            injectTemp = stateToTemp.get(state)
+            if injectTemp is None:
+                self.log.info(f"[TC{self.qcId}] Unknown state '{state}', skipping")
+                prevState = state
+                continue
+
+            if not inShutdown:
+                self.log.info(
+                    f"[TC{self.qcId}] {prevState} -> {state}: inject '{sensorName}' "
+                    f"at {injectTemp} Celcius (expect event)")
+                self.thermalSensorDevice.injectTemperatureUpdate(
+                    sensorName=sensorName,
+                    temperatureCelsius=injectTemp)
+                delay = INTER_PHASE_DELAY_S * 2 if state == 'SHUTDOWN' else INTER_PHASE_DELAY_S
+                time.sleep(delay)
+
+                if state == 'SHUTDOWN':
+                    inShutdown = True
+            else:
+                self.log.info(
+                    f"[TC{self.qcId}] {prevState} -> {state}: inject '{sensorName}' "
+                    f"at {injectTemp} Celcius (expect SUPPRESSED)")
+                self.thermalSensorDevice.injectTemperatureUpdate(
+                    sensorName=sensorName,
+                    temperatureCelsius=injectTemp)
+                time.sleep((suppressionMs / 1000.0) + INTER_PHASE_DELAY_S)
+
+            prevState = state
+
     def testFunction(self) -> bool:
         """
-        Main test function.
-
-        Flow:
-          1. Read injection temperatures and thresholds from L3 YAML.
-          2. Build a trigger callable:
-               a. Phase 1: overTempCelsius -> triggers EXCEEDED event.
-               b. Phase 2: shutdownTempCelsius -> triggers SHUTDOWN_IMMINENT event.
-               c. Phase 3: recoveryTempCelsius -> must produce NO event.
-               d. Phase 4: safe normal temp -> must produce NO event.
-          3. Run runL3Test("CriticalShutdownWithSuppression", triggerCallable=...).
-          4. Return C++ pass/fail result.
+        Reads transition_states from the L3 YAML config and injection temperatures
+        from the HFP profile, then drives the vcomponent through each transition.
 
         Returns:
             bool: True if the test passed, False otherwise.
@@ -79,62 +114,46 @@ class VTS_THERMALSENSOR_L3_CriticalShutdownWithSuppression(thermalSensorHelperCl
         with open(self.l3TestConfigFile, 'r') as fh:
             l3cfg = yaml.safe_load(fh)
 
-        test_node        = l3cfg['thermalsensor']['L3']['CriticalShutdownWithSuppression']
-        sensor_name      = str(test_node.get('sensorName', 'SoC Die'))
-        over_temp        = float(test_node.get('over_temp_celsius', 98.0))
-        shutdown_temp    = float(test_node.get('shutdown_temp_celsius', 115.0))
-        recovery_temp    = float(test_node.get('recovery_temp_celsius', 80.0))
-        exceeded_celsius = float(test_node.get('critical_temperature_exceeded_celsius', 95.0))
-        timeout_ms       = int(test_node.get('event_timeout_ms', 15000))
-        suppression_ms   = int(test_node.get('suppression_timeout_ms', 5000))
+        # TC2 verifies NORMAL -> EXCEEDED -> SHUTDOWN only.
+        # After CRITICAL_SHUTDOWN_IMMINENT the system shuts down autonomously;
+        # recovery is not expected and subsequent state transitions are suppressed.
+        testNode         = l3cfg['thermalsensor']['L3']
+        transitionStates = ['NORMAL', 'EXCEEDED', 'SHUTDOWN']
+        timeoutMs        = int(testNode.get('event_timeout_ms', 15000))
+        suppressionMs    = int(testNode.get('suppression_timeout_ms', 5000))
 
-        # A safe temperature well below the exceeded threshold
-        safe_temp = exceeded_celsius - 20.0
+        sensors = self.getSensorListFromHFP()
+        if not sensors:
+            self.log.info(f"[TC{self.qcId}] ERROR: no sensors in HFP profile")
+            return False
 
-        trigger_delay = (timeout_ms / 1000.0) / 2.0
+        s          = sensors[0]
+        sensorName = s['name']
+
+        stateToTemp = {
+            'EXCEEDED':  s['over_temp'],
+            'SHUTDOWN':  s['shutdown_temp'],
+            'RECOVERED': s['recovery_temp'],
+            'NORMAL':    s['normal_temp'],
+        }
+
+        triggerDelay = (timeoutMs / 1000.0) / 2.0
 
         self.log.info(
-            f"[TC2] sensor={sensor_name} overTemp={over_temp} shutdownTemp={shutdown_temp} "
-            f"recoveryTemp={recovery_temp} safeTemp={safe_temp} "
-            f"suppressionMs={suppression_ms}")
+            f"[TC{self.qcId}] sensor='{sensorName}' states={transitionStates} "
+            f"exceeded={s['over_temp']} Celcius shutdown={s['shutdown_temp']} Celcius "
+            f"recovered={s['recovery_temp']} Celcius suppressionMs={suppressionMs}")
 
         self.utilities.change_directory(self.hal_session, self.targetWorkspace)
 
-        def _trigger():
-            # Phase 1: over-temperature -> EXCEEDED
-            self.log.info(f"[TC2] Phase 1: {sensor_name} at {over_temp}°C -> EXCEEDED")
-            self.thermalSensorDevice.injectTemperatureUpdate(
-                sensorName=sensor_name,
-                temperatureCelsius=over_temp)
-            time.sleep(INTER_PHASE_DELAY_S)
-
-            # Phase 2: above shutdown threshold -> SHUTDOWN_IMMINENT
-            self.log.info(f"[TC2] Phase 2: {sensor_name} at {shutdown_temp}°C -> SHUTDOWN_IMMINENT")
-            self.thermalSensorDevice.injectTemperatureUpdate(
-                sensorName=sensor_name,
-                temperatureCelsius=shutdown_temp)
-            # Wait long enough for the C++ binary to observe the event and reset its queue
-            time.sleep(INTER_PHASE_DELAY_S * 2)
-
-            # Phase 3: recovery temperature -> must be suppressed
-            self.log.info(f"[TC2] Phase 3: {sensor_name} at {recovery_temp}°C (suppressed)")
-            self.thermalSensorDevice.injectTemperatureUpdate(
-                sensorName=sensor_name,
-                temperatureCelsius=recovery_temp)
-            # Wait the full suppression window plus a small margin
-            time.sleep((suppression_ms / 1000.0) + INTER_PHASE_DELAY_S)
-
-            # Phase 4: safe normal temperature -> must also be suppressed
-            self.log.info(f"[TC2] Phase 4: {sensor_name} at {safe_temp}°C (suppressed)")
-            self.thermalSensorDevice.injectTemperatureUpdate(
-                sensorName=sensor_name,
-                temperatureCelsius=safe_temp)
-            time.sleep((suppression_ms / 1000.0) + INTER_PHASE_DELAY_S)
+        # Patch the YAML with TC2's shutdown sequence before uploading to target.
+        self.updateTransitionStates(transitionStates)
 
         return self.runL3Test(
             "CriticalShutdownWithSuppression",
-            triggerCallable=_trigger,
-            triggerDelay=trigger_delay)
+            triggerCallable=lambda: self._trigger(
+                sensorName, transitionStates, stateToTemp, suppressionMs),
+            triggerDelay=triggerDelay)
 
 
 if __name__ == "__main__":

@@ -122,4 +122,4 @@ sensor:
 
       vendor:
         vendorCode: 1002  # Used in com.rdk.hal.sensor.thermal/TemperatureReading.aidl
-        vendorInfo: "Board ambient temperature sensor."
+        vendorInfo: "Used for general system thermal monitoring."

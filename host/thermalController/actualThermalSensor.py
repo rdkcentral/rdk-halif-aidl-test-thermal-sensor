@@ -14,6 +14,8 @@
 import os
 import sys
 
+from raft.framework.plugins.ut_raft.utUserResponse import utUserResponse
+
 dir_path = os.path.dirname(os.path.realpath(__file__))
 sys.path.append(dir_path)
 
@@ -24,31 +26,50 @@ from thermalController.ThermalSensorControllerInterface import ThermalSensorCont
 class actualThermalSensor(ThermalSensorControllerInterface):
     """
     Actual (hardware) Thermal Sensor controller.
-    Currently not implemented — thermal state is managed by the platform firmware.
+    On real hardware, thermal events are raised by platform firmware so they
+    cannot be injected programmatically.  Each method prompts the test operator
+    to manually trigger the required thermal condition and confirm the result.
     """
 
     def __init__(self, session, prompt: str = "~#", port: int = 8080):
         super().__init__(session, prompt, port)
+        self.testUserResponse = utUserResponse(session, prompt)
 
     def triggerThermalStateChange(self, state: str, sensorName: str = "",
                                   temperatureCelsius: float = 0.0,
                                   timestampMonotonicMs: int = 0):
         """
-        Hardware thermal state-change trigger.
-        Not implemented for real hardware — thermal events are raised by firmware.
+        Prompt the operator to manually trigger a thermal state change on real hardware.
+
+        Args:
+            state (str): Expected target state (e.g. "CRITICAL_TEMPERATURE_EXCEEDED").
+            sensorName (str): Optional sensor name for context in the prompt.
+            temperatureCelsius (float): Optional temperature for context in the prompt.
+            timestampMonotonicMs (int): Unused on real hardware.
+
+        Returns:
+            bool: True if the operator confirmed the state change occurred.
         """
-        raise NotImplementedError(
-            "actualThermalSensor.triggerThermalStateChange: "
-            "not implemented for real hardware"
-        )
+        msg = f"Manually trigger thermal state '{state}'"
+        if sensorName:
+            msg += f" on sensor '{sensorName}' at {temperatureCelsius}\u00b0C"
+        msg += ". Has the device reached the expected state? (Y/N):"
+        return self.testUserResponse.getUserYN(msg)
 
     def injectTemperatureUpdate(self, sensorName: str, temperatureCelsius: float,
                                 timestampMonotonicMs: int = 0):
         """
-        Raw temperature injection.
-        Not implemented for real hardware — temperature is read from physical sensors.
+        Prompt the operator to manually set the temperature on real hardware.
+
+        Args:
+            sensorName (str): Name of the sensor to adjust.
+            temperatureCelsius (float): Target temperature in degrees Celsius.
+            timestampMonotonicMs (int): Unused on real hardware.
+
+        Returns:
+            bool: True if the operator confirmed the temperature was reached.
         """
-        raise NotImplementedError(
-            "actualThermalSensor.injectTemperatureUpdate: "
-            "not implemented for real hardware"
+        return self.testUserResponse.getUserYN(
+            f"Set sensor '{sensorName}' to {temperatureCelsius} Celcius on the hardware. "
+            f"Has the temperature been reached? (Y/N):"
         )

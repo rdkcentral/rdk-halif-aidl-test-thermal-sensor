@@ -19,14 +19,14 @@ injections, with a secondary sensor held at a safe temperature:
 
   Pre-warm : inject secondary sensor at a safe temperature (no state change)
   Phase 1  : inject primary sensor at overTempCelsius
-             → CRITICAL_TEMPERATURE_EXCEEDED
-             → event.temperatureReading reflects primary (highest severity)
+             -> CRITICAL_TEMPERATURE_EXCEEDED
+             -> event.temperatureReading reflects primary (highest severity)
   Phase 1b : inject primary sensor at the same overTempCelsius again
-             → no event (idempotent; state already EXCEEDED)
+             -> no event (idempotent; state already EXCEEDED)
   Phase 2  : inject primary sensor at recoveryTempCelsius (<= criticalRecovered)
-             → CRITICAL_TEMPERATURE_RECOVERED
+             -> CRITICAL_TEMPERATURE_RECOVERED
   Phase 3  : inject primary sensor at normalTempCelsius (well within range)
-             → NORMAL
+             -> NORMAL
 
 The Python host sends TEMPERATURE_UPDATE commands via the vcomponent control-plane.
 The C++ binary waits for events and verifies their content, timestamps, and state
@@ -49,103 +49,150 @@ from vts_thermalsensor_helper import thermalSensorHelperClass
 # Seconds to wait between successive temperature injections so the C++ binary
 # has time to detect the event and advance to the next getNextEvent() call.
 INTER_PHASE_DELAY_S = 2.0
-# A shorter wait used only for the idempotent injection (Phase 1b).
-IDEMPOTENT_DELAY_S = 1.0
 
 
 class VTS_THERMALSENSOR_L3_ThermalExceedRecoveryLifecycle(thermalSensorHelperClass):
     """
-    TC1: NORMAL → EXCEEDED → RECOVERED → NORMAL with aggregation and
+    TC1: NORMAL -> EXCEEDED -> RECOVERED -> NORMAL with aggregation and
     dual-listener validation.
     """
 
     def __init__(self, log: logModule = None):
         self.testName = "ThermalSensor_L3_ThermalExceedRecoveryLifecycle"
-        qcId = "5"
+        qcId = "1"
         super().__init__(self.testName, qcId, log)
+
+    def _trigger(self, pri, sec, states, stateToTempKey):
+
+        # Reset secondary to its safe temperature before the sequence
+        self.log.info(
+            f"[TC{self.qcId}] Pre-warm: '{sec['name']}' at {sec['safe_temp']} Celcius")
+
+        self.thermalSensorDevice.injectTemperatureUpdate(
+            sensorName=sec['name'],
+            temperatureCelsius=sec['safe_temp'])
+
+        time.sleep(INTER_PHASE_DELAY_S)
+
+        prevState = states[0] if states else 'NORMAL'
+
+        for step, state in enumerate(states[1:], start=1):
+            tempKey = stateToTempKey.get(state)
+            if tempKey is None:
+                self.log.info(
+                    f"[TC{self.qcId}] Step {step}: unknown state '{state}', skipping")
+                continue
+
+            injectTemp = pri[tempKey]
+            self.log.info(
+                f"[TC{self.qcId}] Step {step}: '{pri['name']}' at {injectTemp} Celcius "
+                f"({prevState} -> {state})")
+            self.thermalSensorDevice.injectTemperatureUpdate(
+                sensorName=pri['name'],
+                temperatureCelsius=injectTemp)
+            time.sleep(INTER_PHASE_DELAY_S)
+
+            # For NORMAL transition also reset secondary sensor
+            if state == 'NORMAL':
+                self.log.info(
+                    f"[TC{self.qcId}] Step {step}b: '{sec['name']}' at "
+                    f"{sec['safe_temp']} Celcius (secondary reset for NORMAL)")
+                self.thermalSensorDevice.injectTemperatureUpdate(
+                    sensorName=sec['name'],
+                    temperatureCelsius=sec['safe_temp'])
+                time.sleep(INTER_PHASE_DELAY_S)
+
+            prevState = state
+
+    def _runSensorPair(self, primary, secondary, transitionStates, stateToTempKey, triggerDelay) -> bool:
+        """
+        Runs one (primary, secondary) sensor pair through the full transition
+        sequence and returns the pass/fail result.
+
+        When sensorCount == 1, primary and secondary are the same sensor; the
+        pre-warm injection still sets a safe baseline before the sequence starts.
+        """
+        self.log.info(
+            f"[TC{self.qcId}] primary='{primary['name']}' "
+            f"secondary='{secondary['name']}'")
+        self.updateTransitionStates(transitionStates)
+        return self.runL3Test(
+            "ThermalExceedRecoveryLifecycle",
+            triggerCallable=lambda pri=primary, sec=secondary, states=transitionStates: self._trigger(pri, sec, states, stateToTempKey),
+            triggerDelay=triggerDelay)
 
     def testFunction(self) -> bool:
         """
         Main test function.
 
-        Flow:
-          1. Read temperature injection values and sensor names from L3 YAML.
-          2. Build a trigger callable:
-               a. Inject secondary sensor at a safe temperature (pre-warm, no transition).
-               b. Inject primary sensor at overTempCelsius → expect EXCEEDED event.
-               c. Inject primary sensor at overTempCelsius again → idempotent, no event.
-               d. Inject primary sensor at recoveryTempCelsius → expect RECOVERED event.
-               e. Inject primary sensor at normalTempCelsius → expect NORMAL event.
-          3. Run runL3Test("ThermalExceedRecoveryLifecycle", triggerCallable=...).
-          4. Return C++ pass/fail result.
+        Reads the ordered transition_states list from the L3 YAML and all N
+        sensors from the HFP profile.  For every (primary, secondary) sensor
+        pair (i != j), drives the vcomponent through each consecutive state
+        transition in the list and verifies the C++ binary receives the
+        expected event for each step.
+
+        When only one sensor is present in the HFP profile, the test runs once
+        using that sensor as both primary and secondary.
+
+        State-to-injection mapping (derived from HFP thresholds per primary):
+          NORMAL   -> inject primary at normal_temp  (midpoint of reading range)
+          EXCEEDED -> inject primary at over_temp    (exceeded threshold + 2°C)
+          RECOVERED-> inject primary at recovery_temp(recovered threshold - 2°C)
+
+        Before each sequence the secondary sensor is reset to its own safe_temp
+        (recovered - 10°C) to avoid cross-sensor interference.
 
         Returns:
-            bool: True if the test passed, False otherwise.
+            bool: True if ALL sensor pairs passed, False otherwise.
         """
         with open(self.l3TestConfigFile, 'r') as fh:
             l3cfg = yaml.safe_load(fh)
 
-        test_node          = l3cfg['thermalsensor']['L3']['ThermalExceedRecoveryLifecycle']
-        primary_sensor     = str(test_node.get('primary_sensor', 'SoC Die'))
-        secondary_sensor   = str(test_node.get('secondary_sensor', 'Mainboard Ambient'))
-        over_temp          = float(test_node.get('over_temp_celsius', 98.0))
-        recovery_temp      = float(test_node.get('recovery_temp_celsius', 80.0))
-        normal_temp        = float(test_node.get('normal_temp_celsius', 50.0))
-        exceeded_threshold = float(test_node.get('critical_temperature_exceeded_celsius', 95.0))
-        timeout_ms         = int(test_node.get('event_timeout_ms', 15000))
+        # Read the shared L3 config block; transition_states already match TC1.
+        testNode         = l3cfg['thermalsensor']['L3']
+        transitionStates = testNode.get('transition_states', [])
+        timeoutMs        = int(testNode.get('event_timeout_ms', 15000))
 
-        # Safe secondary temperature: 10 °C below the exceeded threshold
-        secondary_safe_temp = exceeded_threshold - 10.0
+        sensors = self.getSensorListFromHFP()
 
-        trigger_delay = (timeout_ms / 1000.0) / 2.0
-
+        sensorCount = len(sensors)
         self.log.info(
-            f"[TC1] primarySensor={primary_sensor} secondarySensor={secondary_sensor} "
-            f"overTemp={over_temp} recoveryTemp={recovery_temp} normalTemp={normal_temp} "
-            f"exceededThreshold={exceeded_threshold} secondarySafeTemp={secondary_safe_temp}")
+            f"[TC{self.qcId}] HFP has {sensorCount} sensor(s): {[s['name'] for s in sensors]}")
+        self.log.info(
+            f"[TC{self.qcId}] transition_states sequence: {transitionStates}")
 
+        # Map state name -> injection temperature key in the sensor dict
+        stateToTempKey = {
+            'EXCEEDED':  'over_temp',
+            'RECOVERED': 'recovery_temp',
+            'NORMAL':    'normal_temp',
+        }
+
+        triggerDelay = (timeoutMs / 1000.0) / 2.0
         self.utilities.change_directory(self.hal_session, self.targetWorkspace)
 
-        def _trigger():
-            # Pre-warm: secondary sensor at safe temperature (no state change expected)
-            self.log.info(f"[TC1] Pre-warm: {secondary_sensor} at {secondary_safe_temp}°C (safe)")
-            self.thermalSensorDevice.injectTemperatureUpdate(
-                sensorName=secondary_sensor,
-                temperatureCelsius=secondary_safe_temp)
-            time.sleep(INTER_PHASE_DELAY_S)
+        overallResult = True
 
-            # Phase 1: over-temperature on primary → EXCEEDED
-            self.log.info(f"[TC1] Phase 1: {primary_sensor} at {over_temp}°C → EXCEEDED")
-            self.thermalSensorDevice.injectTemperatureUpdate(
-                sensorName=primary_sensor,
-                temperatureCelsius=over_temp)
-            time.sleep(INTER_PHASE_DELAY_S)
+        if sensorCount == 1:
+            # Single sensor: use it as both primary and secondary
+            self.log.info(f"[TC{self.qcId}] Single sensor — running self-pair")
+            overallResult = self._runSensorPair(
+                sensors[0], sensors[0], transitionStates, stateToTempKey, triggerDelay)
+        else:
+            # Multiple sensors: test every (primary, secondary) permutation
+            for i in range(sensorCount):
+                for j in range(sensorCount):
+                    if j == i:
+                        continue
+                    pairResult = self._runSensorPair(
+                        sensors[i], sensors[j], transitionStates, stateToTempKey, triggerDelay)
+                    if not pairResult:
+                        self.log.info(
+                            f"[TC{self.qcId}] FAILED for primary='{sensors[i]['name']}' "
+                            f"secondary='{sensors[j]['name']}'")
+                        overallResult = False
 
-            # Phase 1b: same over-temperature on primary → idempotent, no event
-            self.log.info(f"[TC1] Phase 1b: {primary_sensor} at {over_temp}°C (idempotent)")
-            self.thermalSensorDevice.injectTemperatureUpdate(
-                sensorName=primary_sensor,
-                temperatureCelsius=over_temp)
-            time.sleep(IDEMPOTENT_DELAY_S + INTER_PHASE_DELAY_S)
-
-            # Phase 2: recovery temperature on primary → RECOVERED
-            self.log.info(f"[TC1] Phase 2: {primary_sensor} at {recovery_temp}°C → RECOVERED")
-            self.thermalSensorDevice.injectTemperatureUpdate(
-                sensorName=primary_sensor,
-                temperatureCelsius=recovery_temp)
-            time.sleep(INTER_PHASE_DELAY_S)
-
-            # Phase 3: normal temperature on primary → NORMAL
-            self.log.info(f"[TC1] Phase 3: {primary_sensor} at {normal_temp}°C → NORMAL")
-            self.thermalSensorDevice.injectTemperatureUpdate(
-                sensorName=primary_sensor,
-                temperatureCelsius=normal_temp)
-            time.sleep(INTER_PHASE_DELAY_S)
-
-        return self.runL3Test(
-            "ThermalExceedRecoveryLifecycle",
-            triggerCallable=_trigger,
-            triggerDelay=trigger_delay)
+        return overallResult
 
 
 if __name__ == "__main__":

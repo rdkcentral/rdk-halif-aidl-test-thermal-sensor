@@ -102,7 +102,7 @@ class virtualThermalSensor(ThermalSensorControllerInterface):
         Inject a raw temperature reading into the vcomponent.
 
         Sends a TEMPERATURE_UPDATE command to the vcomponent control-plane.
-        The vcomponent evaluateself._sendCommands the value against the configured operational
+        The vcomponent evaluates the value against the configured operational
         thresholds and automatically fires the appropriate state-change event:
 
           temp >= shutdown_threshold             → CRITICAL_SHUTDOWN_IMMINENT
