@@ -48,19 +48,100 @@ UT_ADD_TEST_TO_GROUP(VTS_L1_THERMALSENSOR, UT_TESTS_L1)
 class VTS_L1_THERMALSENSOR : public UTCore
 {
 public:
-    VTS_L1_THERMALSENSOR() : UTCore() {}
+    VTS_L1_THERMALSENSOR() : UTCore() 
+    {
+
+    }
     ~VTS_L1_THERMALSENSOR() override = default;
-    void SetUp() override { android::ProcessState::self()->startThreadPool(); }
-    void TearDown() override {}
+    void SetUp() override 
+    { 
+        android::ProcessState::self()->startThreadPool(); 
+    }
+    void TearDown() override 
+    {
+
+    }
 };
 
-/* ========================================================================== */
-/*  registerEventListener                                                      */
-/* ========================================================================== */
+/* -------------------------------------------------------------------------
+ * Helper: look up an HFP sensor by sensorName.
+ * Returns a pointer into gThermalSensorHFP.sensors, or nullptr if not found.
+ * ------------------------------------------------------------------------- */
+static const thermalSensorHFPSensor_t* getHFPSensorByName(const std::string& name)
+{
+    for (const auto& s : gThermalSensorHFP.sensors)
+    {
+        if (s.sensorName == name)
+            return &s;
+    }
+    return nullptr;
+}
 
 /**
- * @brief Validate all positive and negative paths for registerEventListener()
- *        and unregisterEventListener() in a single sequential flow.
+ * @brief Validate the positive path for registerEventListener() and
+ *        unregisterEventListener(), including re-registration after unregister.
+ *
+ * Steps:
+ *  1. Register a valid listener — must succeed (_aidl_return true).
+ *  2. Unregister the valid listener — must succeed (_aidl_return true).
+ *  3. Re-register the same listener — must succeed (listener is no longer active).
+ *  4. Unregister the re-registered listener — must succeed.
+ *
+ * **Test Group ID:** Basic: 01@n
+ * **Test Case ID:** 001@n
+ * **Priority:** High@n
+ */
+UT_ADD_TEST(VTS_L1_THERMALSENSOR, RegisterUnregisterEventListener_Positive)
+{
+    // Step 1: register a valid listener — must succeed
+    sp<IThermalEventListener> validListener = sp<ThermalSensorEventListener>::make();
+    THERMALSENSOR_REGISTER_EVENT_SUCCESS(gTHERMALSENSORHandle, validListener);
+
+    // Step 2: unregister the valid listener — must succeed
+    THERMALSENSOR_UNREGISTER_EVENT_SUCCESS(gTHERMALSENSORHandle, validListener);
+
+    // Step 3: re-register the same listener — must succeed after unregister
+    THERMALSENSOR_REGISTER_EVENT_SUCCESS(gTHERMALSENSORHandle, validListener);
+
+    // Step 4: final unregister — must succeed
+    THERMALSENSOR_UNREGISTER_EVENT_SUCCESS(gTHERMALSENSORHandle, validListener);
+}
+
+/**
+ * @brief Validate that multiple concurrent listeners can be registered and
+ *        unregistered independently without interference.
+ *
+ * Steps:
+ *  1. Create NUM_LISTENERS distinct listener instances.
+ *  2. Register all listeners in forward order — each must succeed.
+ *  3. Unregister all listeners in reverse order — each must succeed.
+ *
+ * **Test Group ID:** Basic: 01@n
+ * **Test Case ID:** 00@n
+ * **Priority:** High@n
+ */
+UT_ADD_TEST(VTS_L1_THERMALSENSOR, RegisterUnregisterEventListener_MultipleListener)
+{
+    constexpr int NUM_LISTENERS = 10;
+    std::vector<sp<IThermalEventListener>> listeners;
+    listeners.reserve(NUM_LISTENERS);
+
+    // Step 1: create NUM_LISTENERS distinct listener instances
+    for (int i = 0; i < NUM_LISTENERS; ++i)
+        listeners.push_back(sp<ThermalSensorEventListener>::make());
+
+    // Step 2: register all listeners in forward order — each must succeed
+    for (auto& l : listeners)
+        THERMALSENSOR_REGISTER_EVENT_SUCCESS(gTHERMALSENSORHandle, l);
+
+    // Step 3: unregister all listeners in reverse order — each must succeed
+    for (auto& l : listeners)
+        THERMALSENSOR_UNREGISTER_EVENT_SUCCESS(gTHERMALSENSORHandle, l);
+}
+
+/**
+ * @brief Validate all negative paths for registerEventListener() and
+ *        unregisterEventListener().
  *
  * Steps:
  *  1. Register a null listener — binder must reject with EX_NULL_POINTER.
@@ -71,10 +152,10 @@ public:
  *  6. Unregister a null listener — binder must reject with EX_NULL_POINTER.
  *
  * **Test Group ID:** Basic: 01@n
- * **Test Case ID:** 001@n
+ * **Test Case ID:** 003@n
  * **Priority:** High@n
  */
-UT_ADD_TEST(VTS_L1_THERMALSENSOR, RegisterUnregisterEventListener)
+UT_ADD_TEST(VTS_L1_THERMALSENSOR, RegisterUnregisterEventListener_Negative)
 {
     sp<IThermalEventListener> nullListener = nullptr;
 
@@ -133,13 +214,6 @@ UT_ADD_TEST(VTS_L1_THERMALSENSOR, GetCurrentThermalState_ValidStateAndHFPConsist
     UT_LOG_INFO("[L1 GetCurrentThermalState_ValidStateAndHFPConsistency] state=%s",
                 UT_Control_GetMapString(state_mapTable_thermalsensor, (int32_t)state));
 
-    /* Step 2: cross-check state against each HFP sensor's live temperature */
-    if (gThermalSensorHFP.sensors.empty())
-    {
-        UT_LOG_INFO("[L1 GetCurrentThermalState_ValidStateAndHFPConsistency] No sensors in HFP — skipping threshold cross-check");
-        return;
-    }
-
     std::vector<TemperatureReading> readings;
     THERMALSENSOR_GET_TEMPERATURES(gTHERMALSENSORHandle, readings);
 
@@ -147,29 +221,31 @@ UT_ADD_TEST(VTS_L1_THERMALSENSOR, GetCurrentThermalState_ValidStateAndHFPConsist
     bool anyAboveExceeded  = false;
     bool allBelowRecovered = true;
 
-    for (const auto& hfpSensor : gThermalSensorHFP.sensors)
+    /* Step 2: cross-check state against each HFP sensor's reading count with HFP sensor */
+    UT_ASSERT_EQUAL(readings.size(), gThermalSensorHFP.sensors.size());
+
+    for (const auto& reading : readings)
     {
-        for (const auto& reading : readings)
-        {
-            if (android::String8(reading.sensorName).string() != hfpSensor.sensorName)
-                continue;
+        const thermalSensorHFPSensor_t* hfpSensor = getHFPSensorByName(
+            android::String8(reading.sensorName).string());
+        UT_ASSERT_TRUE(hfpSensor != nullptr);
+        if (hfpSensor == nullptr)
+            continue;
 
-            double temp = reading.temperatureCelsius;
-            UT_LOG_INFO("[L1 GetCurrentThermalState_ValidStateAndHFPConsistency] sensor='%s' temp=%.2f "
+        double temp = reading.temperatureCelsius;
+        UT_LOG_INFO("[L1 GetCurrentThermalState_ValidStateAndHFPConsistency] sensor='%s' temp=%.2f "
                         "thresholds: recovered=%.2f exceeded=%.2f shutdown=%.2f",
-                        hfpSensor.sensorName.c_str(), temp,
-                        hfpSensor.triggerRecoveredCelsius,
-                        hfpSensor.triggerExceededCelsius,
-                        hfpSensor.triggerShutdownCelsius);
+                        hfpSensor->sensorName.c_str(), temp,
+                        hfpSensor->triggerRecoveredCelsius,
+                        hfpSensor->triggerExceededCelsius,
+                        hfpSensor->triggerShutdownCelsius);
 
-            if (temp >= hfpSensor.triggerShutdownCelsius)
-                anyAboveShutdown = true;
-            if (temp >= hfpSensor.triggerExceededCelsius)
-                anyAboveExceeded = true;
-            if (temp > hfpSensor.triggerRecoveredCelsius)
-                allBelowRecovered = false;
-            break;
-        }
+        if (temp >= hfpSensor->triggerShutdownCelsius)
+            anyAboveShutdown = true;
+        if (temp >= hfpSensor->triggerExceededCelsius)
+            anyAboveExceeded = true;
+        if (temp > hfpSensor->triggerRecoveredCelsius)
+            allBelowRecovered = false;
     }
 
     if (anyAboveShutdown)
@@ -191,17 +267,13 @@ UT_ADD_TEST(VTS_L1_THERMALSENSOR, GetCurrentThermalState_ValidStateAndHFPConsist
     }
     else
     {
-            UT_LOG_INFO("[L1 GetCurrentThermalState_ValidStateAndHFPConsistency] Mixed sensor states — no specific expectation");
+        UT_LOG_INFO("[L1 GetCurrentThermalState_ValidStateAndHFPConsistency] Mixed sensor states — no specific expectation");
     }
     /* Step 3: repeated call must return the same state (consistency) */
     State newState;
     THERMALSENSOR_GET_CURRENT_STATE(gTHERMALSENSORHandle, newState);
     UT_ASSERT_EQUAL(state, newState);
 }
-
-/* ========================================================================== */
-/*  getCurrentTemperatures                                                     */
-/* ========================================================================== */
 
 /**
  * @brief Validate getCurrentTemperatures() returns readings that match the HFP profile.
@@ -255,15 +327,8 @@ UT_ADD_TEST(VTS_L1_THERMALSENSOR, GetCurrentTemperatures_CountStructureAndProfil
                     i, android::String8(currentReading.sensorName).c_str(), currentReading.timestampMonotonicMs);
 
         // Find matching HFP sensor by name
-        const thermalSensorHFPSensor_t* hfp = nullptr;
-        for (const auto& s : gThermalSensorHFP.sensors)
-        {
-            if (android::String8(currentReading.sensorName).string() == s.sensorName)
-            {
-                hfp = &s;
-                break;
-            }
-        }
+        const thermalSensorHFPSensor_t* hfp = getHFPSensorByName(
+            android::String8(currentReading.sensorName).string());
 
         // Every reading must map to an HFP-declared sensor
         UT_ASSERT_TRUE(hfp != nullptr);

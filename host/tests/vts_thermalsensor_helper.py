@@ -174,10 +174,16 @@ class thermalSensorHelperClass(utHelperClass):
             self.hal_session_1.write(f"cat {self.vcomponentLogFile}")
             logContent = self.hal_session_1.read_until(prompt, timeout=5)
             self.log.info(f"--- vcomponent logs for {testcase} ---")
+            import re
+            _ansi_re = re.compile(r'\x1b\[[0-9;]*[mK]')
             for line in logContent.splitlines():
-                stripped = line.strip()
+                stripped = _ansi_re.sub('', line).strip()
                 if stripped:
-                    self.log.info(f"[vcomponent] {stripped}")
+                    # Replace non-ASCII characters (e.g. → arrows) so the
+                    # message can be encoded on any platform (including
+                    # Windows cp1252 terminals).
+                    safe = stripped.encode('ascii', errors='replace').decode('ascii')
+                    self.log.info(f"[vcomponent] {safe}")
             self.log.info(f"--- end vcomponent logs for {testcase} ---")
             self.hal_session_1.write(f"> {self.vcomponentLogFile}")
         except Exception as exc:

@@ -19,13 +19,13 @@ suppresses all subsequent state transitions, even when the temperature
 drops back into the recovery or normal range:
 
   Phase 1 : inject sensorName at overTempCelsius
-            → CRITICAL_TEMPERATURE_EXCEEDED
+            -> CRITICAL_TEMPERATURE_EXCEEDED
   Phase 2 : inject sensorName at shutdownTempCelsius (> enteringCriticalShutdown)
-            → CRITICAL_SHUTDOWN_IMMINENT
+            -> CRITICAL_SHUTDOWN_IMMINENT
   Phase 3 : inject sensorName at recoveryTempCelsius
-            → suppressed (no event expected within suppressionTimeoutMs)
+            -> suppressed (no event expected within suppressionTimeoutMs)
   Phase 4 : inject sensorName at a safe normal temperature
-            → suppressed (no event expected within suppressionTimeoutMs)
+            -> suppressed (no event expected within suppressionTimeoutMs)
 
 The Python host sends TEMPERATURE_UPDATE commands via the vcomponent control-plane.
 The C++ binary verifies event delivery (phases 1 to 2) and absence of events
@@ -51,7 +51,7 @@ INTER_PHASE_DELAY_S = 2.0
 
 class VTS_THERMALSENSOR_L3_CriticalShutdownWithSuppression(thermalSensorHelperClass):
     """
-    TC2: NORMAL → EXCEEDED → SHUTDOWN_IMMINENT; recovery and normal are suppressed.
+    TC2: NORMAL -> EXCEEDED -> SHUTDOWN_IMMINENT; recovery and normal are suppressed.
     """
 
     def __init__(self, log: logModule = None):
@@ -66,10 +66,10 @@ class VTS_THERMALSENSOR_L3_CriticalShutdownWithSuppression(thermalSensorHelperCl
         Flow:
           1. Read injection temperatures and thresholds from L3 YAML.
           2. Build a trigger callable:
-               a. Phase 1: overTempCelsius → triggers EXCEEDED event.
-               b. Phase 2: shutdownTempCelsius → triggers SHUTDOWN_IMMINENT event.
-               c. Phase 3: recoveryTempCelsius → must produce NO event.
-               d. Phase 4: safe normal temp → must produce NO event.
+               a. Phase 1: overTempCelsius -> triggers EXCEEDED event.
+               b. Phase 2: shutdownTempCelsius -> triggers SHUTDOWN_IMMINENT event.
+               c. Phase 3: recoveryTempCelsius -> must produce NO event.
+               d. Phase 4: safe normal temp -> must produce NO event.
           3. Run runL3Test("CriticalShutdownWithSuppression", triggerCallable=...).
           4. Return C++ pass/fail result.
 
@@ -101,22 +101,22 @@ class VTS_THERMALSENSOR_L3_CriticalShutdownWithSuppression(thermalSensorHelperCl
         self.utilities.change_directory(self.hal_session, self.targetWorkspace)
 
         def _trigger():
-            # Phase 1: over-temperature → EXCEEDED
-            self.log.info(f"[TC2] Phase 1: {sensor_name} at {over_temp}°C → EXCEEDED")
+            # Phase 1: over-temperature -> EXCEEDED
+            self.log.info(f"[TC2] Phase 1: {sensor_name} at {over_temp}°C -> EXCEEDED")
             self.thermalSensorDevice.injectTemperatureUpdate(
                 sensorName=sensor_name,
                 temperatureCelsius=over_temp)
             time.sleep(INTER_PHASE_DELAY_S)
 
-            # Phase 2: above shutdown threshold → SHUTDOWN_IMMINENT
-            self.log.info(f"[TC2] Phase 2: {sensor_name} at {shutdown_temp}°C → SHUTDOWN_IMMINENT")
+            # Phase 2: above shutdown threshold -> SHUTDOWN_IMMINENT
+            self.log.info(f"[TC2] Phase 2: {sensor_name} at {shutdown_temp}°C -> SHUTDOWN_IMMINENT")
             self.thermalSensorDevice.injectTemperatureUpdate(
                 sensorName=sensor_name,
                 temperatureCelsius=shutdown_temp)
             # Wait long enough for the C++ binary to observe the event and reset its queue
             time.sleep(INTER_PHASE_DELAY_S * 2)
 
-            # Phase 3: recovery temperature → must be suppressed
+            # Phase 3: recovery temperature -> must be suppressed
             self.log.info(f"[TC2] Phase 3: {sensor_name} at {recovery_temp}°C (suppressed)")
             self.thermalSensorDevice.injectTemperatureUpdate(
                 sensorName=sensor_name,
@@ -124,7 +124,7 @@ class VTS_THERMALSENSOR_L3_CriticalShutdownWithSuppression(thermalSensorHelperCl
             # Wait the full suppression window plus a small margin
             time.sleep((suppression_ms / 1000.0) + INTER_PHASE_DELAY_S)
 
-            # Phase 4: safe normal temperature → must also be suppressed
+            # Phase 4: safe normal temperature -> must also be suppressed
             self.log.info(f"[TC2] Phase 4: {sensor_name} at {safe_temp}°C (suppressed)")
             self.thermalSensorDevice.injectTemperatureUpdate(
                 sensorName=sensor_name,

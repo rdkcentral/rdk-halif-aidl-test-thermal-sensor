@@ -74,6 +74,7 @@ rackConfig:
                         port: 5522
                         control_port: 8080
                     outbound:
+                        workspaceDirectory: "./logs/workspace"
                         download_url: "tftp://tftp-server.com/rack1/slot1/"
                         upload_url: "sftp://server-address/home/workspace/tftp/rack1/slot1/"
                         upload_url_base_dir: "sftp://server-address/home/workspace/tftp/rack1/slot1"
