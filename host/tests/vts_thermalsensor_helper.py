@@ -182,7 +182,7 @@ class thermalSensorHelperClass(utHelperClass):
 
         Args:
             states (list): Ordered list of state name strings, e.g.
-                ``['NORMAL', 'EXCEEDED', 'RECOVERED', 'NORMAL']``.
+                ``['NORMAL', 'CRITICAL_TEMPERATURE_EXCEEDED', 'CRITICAL_TEMPERATURE_RECOVERED', 'NORMAL']``.
         """
         data = self.readYaml(self.l3TestConfigFile)
         data['thermalsensor']['L3']['transition_states'] = list(states)

@@ -53,7 +53,7 @@ INTER_PHASE_DELAY_S = 2.0
 
 class VTS_THERMALSENSOR_L3_ThermalExceedRecoveryLifecycle(thermalSensorHelperClass):
     """
-    TC1: NORMAL -> EXCEEDED -> RECOVERED -> NORMAL with aggregation and
+    TC1: NORMAL -> CRITICAL_TEMPERATURE_EXCEEDED -> CRITICAL_TEMPERATURE_RECOVERED -> NORMAL with aggregation and
     dual-listener validation.
     """
 
@@ -136,8 +136,8 @@ class VTS_THERMALSENSOR_L3_ThermalExceedRecoveryLifecycle(thermalSensorHelperCla
 
         State-to-injection mapping (derived from HFP thresholds per primary):
           NORMAL   -> inject primary at normal_temp  (midpoint of reading range)
-          EXCEEDED -> inject primary at over_temp    (exceeded threshold + 2°C)
-          RECOVERED-> inject primary at recovery_temp(recovered threshold - 2°C)
+          CRITICAL_TEMPERATURE_EXCEEDED -> inject primary at over_temp    (exceeded threshold + 2°C)
+          CRITICAL_TEMPERATURE_RECOVERED-> inject primary at recovery_temp(recovered threshold - 2°C)
 
         Before each sequence the secondary sensor is reset to its own safe_temp
         (recovered - 10°C) to avoid cross-sensor interference.
@@ -163,9 +163,9 @@ class VTS_THERMALSENSOR_L3_ThermalExceedRecoveryLifecycle(thermalSensorHelperCla
 
         # Map state name -> injection temperature key in the sensor dict
         stateToTempKey = {
-            'EXCEEDED':  'over_temp',
-            'RECOVERED': 'recovery_temp',
-            'NORMAL':    'normal_temp',
+            'CRITICAL_TEMPERATURE_EXCEEDED':  'over_temp',
+            'CRITICAL_TEMPERATURE_RECOVERED': 'recovery_temp',
+            'NORMAL':                         'normal_temp',
         }
 
         triggerDelay = (timeoutMs / 1000.0) / 2.0

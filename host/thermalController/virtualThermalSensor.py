@@ -62,9 +62,9 @@ class virtualThermalSensor(ThermalSensorControllerInterface):
         """
         Simulate a thermal state-change event.
 
-        Sends a THERMAL_STATE_CHANGE command to the vcomponent control-plane.
+        Sends a thermal_state_change command to the vcomponent control-plane.
         The vcomponent expects:
-          IThermalSensor/command:              THERMAL_STATE_CHANGE
+          IThermalSensor/command:              thermal_state_change
           IThermalSensor/state:                <state string>
           IThermalSensor/sensorName:           <sensorName>          (optional)
           IThermalSensor/temperatureCelsius:   <temp>                (optional)
@@ -84,7 +84,7 @@ class virtualThermalSensor(ThermalSensorControllerInterface):
 
         payload = {
             "IThermalSensor": {
-                "command": "THERMAL_STATE_CHANGE",
+                "command": "thermal_state_change",
                 "state": state,
                 "timestampMonotonicMs": timestampMonotonicMs,
             }
@@ -101,7 +101,7 @@ class virtualThermalSensor(ThermalSensorControllerInterface):
         """
         Inject a raw temperature reading into the vcomponent.
 
-        Sends a TEMPERATURE_UPDATE command to the vcomponent control-plane.
+        Sends a temperature_update command to the vcomponent control-plane.
         The vcomponent evaluates the value against the configured operational
         thresholds and automatically fires the appropriate state-change event:
 
@@ -120,7 +120,7 @@ class virtualThermalSensor(ThermalSensorControllerInterface):
 
         payload = {
             "IThermalSensor": {
-                "command": "TEMPERATURE_UPDATE",
+                "command": "temperature_update",
                 "sensorName": sensorName,
                 "temperatureCelsius": temperatureCelsius,
                 "timestampMonotonicMs": timestampMonotonicMs,

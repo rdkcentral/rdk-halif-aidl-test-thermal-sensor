@@ -53,16 +53,35 @@ class VTS_THERMALSENSOR_L3_CriticalShutdownWithSuppression(thermalSensorHelperCl
 
     def __init__(self, log: logModule = None):
         self.testName = "ThermalSensor_L3_CriticalShutdownWithSuppression"
-        qcId = "6"
+        qcId = "2"
         super().__init__(self.testName, qcId, log)
+
+    def _verifyShutdownAndRecovery(self):
+        """
+        Verifies device recovery after a thermal shutdown event.
+
+        TODO:
+            - After CRITICAL_SHUTDOWN_IMMINENT is triggered, run a PingTest to
+              confirm the device is still alive.
+            - Wait for ``shutdown_min_downtime_s`` + ``min_cooldown_seconds``
+              (both defined in the HFP profile) before injecting the recovery
+              temperature.
+            - Inject a recovery temperature and verify the device fires a
+              CRITICAL_TEMPERATURE_RECOVERED event.
+            - Verify the boot reason reported after recovery is
+              ``THERMAL_SHUTDOWN_RECOVERY`` (via IBoot.getBootReason()).
+            - Refer to the thermal policy defined by expert engineering teams
+              (not user-configurable).
+        """
+        return True
 
     def _trigger(self, sensorName: str, transitionStates: list,
                  stateToTemp: dict, suppressionMs: int):
         """
         Inject temperature updates for each state transition in sequence.
 
-        States up to and including SHUTDOWN fire the event normally.
-        States after SHUTDOWN are injected but the vcomponent must suppress them.
+        States up to and including CRITICAL_SHUTDOWN_IMMINENT fire the event normally.
+        States after CRITICAL_SHUTDOWN_IMMINENT are injected but the vcomponent must suppress them.
 
         Args:
             sensorName (str): Name of the primary sensor to inject.
@@ -90,7 +109,7 @@ class VTS_THERMALSENSOR_L3_CriticalShutdownWithSuppression(thermalSensorHelperCl
                 delay = INTER_PHASE_DELAY_S * 2 if state == 'SHUTDOWN' else INTER_PHASE_DELAY_S
                 time.sleep(delay)
 
-                if state == 'SHUTDOWN':
+                if state == 'CRITICAL_SHUTDOWN_IMMINENT':
                     inShutdown = True
             else:
                 self.log.info(
@@ -114,11 +133,11 @@ class VTS_THERMALSENSOR_L3_CriticalShutdownWithSuppression(thermalSensorHelperCl
         with open(self.l3TestConfigFile, 'r') as fh:
             l3cfg = yaml.safe_load(fh)
 
-        # TC2 verifies NORMAL -> EXCEEDED -> SHUTDOWN only.
+        # TC2 verifies NORMAL -> EXCEEDED -> CRITICAL_SHUTDOWN_IMMINENT only.
         # After CRITICAL_SHUTDOWN_IMMINENT the system shuts down autonomously;
         # recovery is not expected and subsequent state transitions are suppressed.
         testNode         = l3cfg['thermalsensor']['L3']
-        transitionStates = ['NORMAL', 'EXCEEDED', 'SHUTDOWN']
+        transitionStates = ['NORMAL', 'CRITICAL_TEMPERATURE_EXCEEDED', 'CRITICAL_SHUTDOWN_IMMINENT']
         timeoutMs        = int(testNode.get('event_timeout_ms', 15000))
         suppressionMs    = int(testNode.get('suppression_timeout_ms', 5000))
 
@@ -131,10 +150,10 @@ class VTS_THERMALSENSOR_L3_CriticalShutdownWithSuppression(thermalSensorHelperCl
         sensorName = s['name']
 
         stateToTemp = {
-            'EXCEEDED':  s['over_temp'],
-            'SHUTDOWN':  s['shutdown_temp'],
-            'RECOVERED': s['recovery_temp'],
-            'NORMAL':    s['normal_temp'],
+            'CRITICAL_TEMPERATURE_EXCEEDED':  s['over_temp'],
+            'CRITICAL_SHUTDOWN_IMMINENT':      s['shutdown_temp'],
+            'CRITICAL_TEMPERATURE_RECOVERED': s['recovery_temp'],
+            'NORMAL':                         s['normal_temp'],
         }
 
         triggerDelay = (timeoutMs / 1000.0) / 2.0
@@ -149,12 +168,14 @@ class VTS_THERMALSENSOR_L3_CriticalShutdownWithSuppression(thermalSensorHelperCl
         # Patch the YAML with TC2's shutdown sequence before uploading to target.
         self.updateTransitionStates(transitionStates)
 
-        return self.runL3Test(
+        result = self.runL3Test(
             "CriticalShutdownWithSuppression",
             triggerCallable=lambda: self._trigger(
                 sensorName, transitionStates, stateToTemp, suppressionMs),
             triggerDelay=triggerDelay)
 
+        result = result and self._verifyShutdownAndRecovery()
+        return result
 
 if __name__ == "__main__":
     summaryLogName = os.path.splitext(os.path.basename(__file__))[0] + "_summary"

@@ -25,8 +25,8 @@ thermalsensor:
   L3:
     transition_states:
         - NORMAL
-        - EXCEEDED
-        - RECOVERED
+        - CRITICAL_TEMPERATURE_EXCEEDED
+        - CRITICAL_TEMPERATURE_RECOVERED
         - NORMAL
     event_timeout_ms: 15000
     suppression_timeout_ms: 5000

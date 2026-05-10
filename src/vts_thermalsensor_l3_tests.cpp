@@ -121,9 +121,9 @@ UT_ADD_TEST(VTS_L3_THERMALSENSOR, ThermalExceedRecoveryLifecycle)
 
     /* Map state name string -> State enum */
     auto toState = [](const std::string& s) -> State {
-        if (s == "EXCEEDED")  return State::CRITICAL_TEMPERATURE_EXCEEDED;
-        if (s == "RECOVERED") return State::CRITICAL_TEMPERATURE_RECOVERED;
-        if (s == "SHUTDOWN")  return State::CRITICAL_SHUTDOWN_IMMINENT;
+        if (s == "CRITICAL_TEMPERATURE_EXCEEDED")  return State::CRITICAL_TEMPERATURE_EXCEEDED;
+        if (s == "CRITICAL_TEMPERATURE_RECOVERED") return State::CRITICAL_TEMPERATURE_RECOVERED;
+        if (s == "CRITICAL_SHUTDOWN_IMMINENT")      return State::CRITICAL_SHUTDOWN_IMMINENT;
         return State::NORMAL;
     };
 
@@ -216,9 +216,9 @@ UT_ADD_TEST(VTS_L3_THERMALSENSOR, CriticalShutdownWithSuppression)
     UT_ASSERT_TRUE(cfg.transitionStates.size() >= 2);
 
     auto toState = [](const std::string& s) -> State {
-        if (s == "EXCEEDED")  return State::CRITICAL_TEMPERATURE_EXCEEDED;
-        if (s == "RECOVERED") return State::CRITICAL_TEMPERATURE_RECOVERED;
-        if (s == "SHUTDOWN")  return State::CRITICAL_SHUTDOWN_IMMINENT;
+        if (s == "CRITICAL_TEMPERATURE_EXCEEDED")  return State::CRITICAL_TEMPERATURE_EXCEEDED;
+        if (s == "CRITICAL_TEMPERATURE_RECOVERED") return State::CRITICAL_TEMPERATURE_RECOVERED;
+        if (s == "CRITICAL_SHUTDOWN_IMMINENT")      return State::CRITICAL_SHUTDOWN_IMMINENT;
         return State::NORMAL;
     };
 
@@ -256,11 +256,11 @@ UT_ADD_TEST(VTS_L3_THERMALSENSOR, CriticalShutdownWithSuppression)
             UT_LOG_INFO("[L3 TC2] step %zu OK: state=%s ts=%lld",
                         step, toName.c_str(), (long long)lastTs);
 
-            if (toName == "SHUTDOWN")
+            if (toName == "CRITICAL_SHUTDOWN_IMMINENT")
             {
                 inShutdown = true;
                 mListener->resetEventQueue();
-                UT_LOG_INFO("[L3 TC2] SHUTDOWN reached — subsequent injections must be suppressed");
+                UT_LOG_INFO("[L3 TC2] CRITICAL_SHUTDOWN_IMMINENT reached — subsequent injections must be suppressed");
             }
         }
         else
