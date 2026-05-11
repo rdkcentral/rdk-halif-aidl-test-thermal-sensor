@@ -17,7 +17,7 @@
 
 This document describes the Level 3 (L3) Low-Level Test Specification for the Thermal Sensor HAL.
 
-L3 testing validates end-to-end Thermal Sensor HAL functionality using the vComponent with control-plane temperature injection. The test suite exercises:
+L3 testing validates end-to-end Thermal Sensor HAL functionality using control-plane temperature injection. The test suite exercises:
 
 * Thermal state transition lifecycle (NORMAL → CRITICAL_TEMPERATURE_EXCEEDED → CRITICAL_TEMPERATURE_RECOVERED → NORMAL) driven by raw temperature injections
 * Monotonic timestamp ordering across consecutive `onThermalStateChange` events
@@ -25,7 +25,7 @@ L3 testing validates end-to-end Thermal Sensor HAL functionality using the vComp
 * Critical shutdown delivery (`CRITICAL_SHUTDOWN_IMMINENT`) and subsequent event suppression
 * Listener fan-out and listener-gate semantics
 
-L3 tests require external stimulus injected by the Python host via the UT control plane. The DUT-side VTS binary registers the listener, waits for events, and validates results; the Python host drives temperature injections via the vComponent control port.
+L3 tests require external stimulus injected by the Python host via the UT control plane. The DUT-side VTS binary registers the listener, waits for events, and validates results; the Python host drives temperature injections via the control port.
 
 ---
 
@@ -68,7 +68,7 @@ The L3 Thermal Sensor test suite operates as follows:
 2. Python host uploads the updated YAML to the DUT target directory.
 3. Python host starts the DUT-side VTS binary via SSH (or triggers it within the RAFT framework).
 4. DUT-side VTS parses the YAML, registers the event listener, and waits for `onThermalStateChange` events.
-5. Python host injects synthetic raw temperature values via the vComponent control port to drive vendor-policy-level state transitions.
+5. Python host injects synthetic raw temperature values via the control port to drive vendor-policy-level state transitions.
 6. DUT-side VTS validates received events (state correctness, monotonic timestamp, `getCurrentThermalState()` consistency) and reports pass/fail.
 7. Python host collects the result and logs it.
 
@@ -100,7 +100,7 @@ The L3 Thermal Sensor test suite operates as follows:
 ### Pre-Conditions
 
 * Thermal Sensor HAL service must be running.
-* vComponent must be running with the control plane enabled.
+* Thermal Sensor HAL service must be running with the control plane enabled.
 * YAML configuration must be present at the path defined by `VTS_THERMALSENSOR_TEST_CONFIG_PATH`.
 * [test_configuration/vts_l3_ThermalSensor.yaml](../../test_configuration/vts_l3_ThermalSensor.yaml) must have `ThermalExceedRecoveryLifecycle` section populated with at least 2 states.
 * System must start in `NORMAL` thermal state.
@@ -109,7 +109,7 @@ The L3 Thermal Sensor test suite operates as follows:
 
 * Thermal Sensor HAL Interfaces: `IThermalSensor`, `IThermalEventListener`
 * Python host test: `vts_thermalsensor_L3_ThermalExceedRecoveryLifecycle.py`
-* UT control plane for temperature injection via vComponent control port
+* UT control plane for temperature injection
 
 ### User Interaction
 
@@ -154,8 +154,8 @@ graph TD
 | 3 | Register event listener | Valid `IThermalEventListener` | `registerEventListener()` returns `true`; status OK |
 | 4 | Drain any stale events | 200 ms drain window | No events received |
 | 5 | Call `getCurrentThermalState()` and assert result is `NORMAL` | — | State is `NORMAL` |
-| 6 | Python host pre-warms the secondary sensor to its safe temperature (`recovered_threshold − 10°C`) to avoid cross-sensor interference | Safe temperature derived from HFP thresholds | vComponent accepts injection; no state-change event fired |
-| 7 | For each consecutive `(from → to)` pair in `transition_states`: Python host injects a raw temperature value via the control port that crosses the HFP threshold for the `to` state. For a `NORMAL` transition, the secondary sensor is also reset to its safe temperature | Injection temperature derived from HFP thresholds (`exceeded + 2°C`, `recovered − 2°C`, or midpoint for `NORMAL`) | vComponent accepts injection; triggers vendor policy transition |
+| 6 | Python host pre-warms the secondary sensor to its safe temperature (`recovered_threshold − 10°C`) to avoid cross-sensor interference | Safe temperature derived from HFP thresholds | Injection accepted; no state-change event fired |
+| 7 | For each consecutive `(from → to)` pair in `transition_states`: Python host injects a raw temperature value via the control port that crosses the HFP threshold for the `to` state. For a `NORMAL` transition, the secondary sensor is also reset to its safe temperature | Injection temperature derived from HFP thresholds (`exceeded + 2°C`, `recovered − 2°C`, or midpoint for `NORMAL`) | Injection accepted; triggers vendor policy transition |
 | 8 | DUT-side VTS waits for `onThermalStateChange` event within `event_timeout_ms` | `event_timeout_ms` from YAML | Event received before timeout |
 | 9 | Assert `event.state == toState` for the current transition | Expected `State` enum value | Event state matches the `to` state in the YAML sequence |
 | 10 | Assert `event.timestampMonotonicMs > lastTimestampMs` (strictly greater than previous) | Previous and current `timestampMonotonicMs` | Timestamp is monotonically increasing |
@@ -207,7 +207,7 @@ thermalsensor:
 ### Pre-Conditions
 
 * Thermal Sensor HAL service must be running.
-* vComponent must be running with the control plane enabled.
+* Thermal Sensor HAL service must be running with the control plane enabled.
 * YAML configuration must be present at the path defined by `VTS_THERMALSENSOR_TEST_CONFIG_PATH`.
 * [test_configuration/vts_l3_ThermalSensor.yaml](../../test_configuration/vts_l3_ThermalSensor.yaml) must have a valid `thermalsensor.L3` config block. The Python host patches `transition_states` to `[NORMAL, CRITICAL_TEMPERATURE_EXCEEDED, CRITICAL_SHUTDOWN_IMMINENT]` before running this test.
 * System must start in `NORMAL` thermal state.
@@ -216,7 +216,7 @@ thermalsensor:
 
 * Thermal Sensor HAL Interfaces: `IThermalSensor`, `IThermalEventListener`
 * Python host test: `vts_thermalsensor_L3_CriticalShutdownWithSuppression.py`
-* UT control plane for temperature injection via vComponent control port
+* UT control plane for temperature injection
 
 ### User Interaction
 

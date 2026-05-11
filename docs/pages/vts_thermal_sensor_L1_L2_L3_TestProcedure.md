@@ -75,7 +75,7 @@ Set the following environment variables before building:
 - `LINUX_BINDER_OUT_DIR`: Path to the Linux binder output directory.
 - `UT_CORE_VERSION`: UT-Core version (optional; defaults to latest tag).
 - `RDK_HALIF_AIDL_VERSION`: AIDL HAL spec version (optional; defaults to latest HEAD).
-- `VCOMPONENT_THERMALSENSOR_VERSION`: Thermal Sensor vComponent version (if applicable).
+- `VCOMPONENT_THERMALSENSOR_VERSION`: Thermal Sensor simulator version (if applicable).
 
 Example:
 
@@ -148,7 +148,7 @@ Update the console sessions and `thermalSensorController` block for your test se
 |----------------|-------------|
 | `default` | Device status and basic operations |
 | `ssh_hal_test` | Executes Thermal Sensor HAL VTS binary on DUT |
-| `ssh_hal_test_1` | Second SSH session for vComponent control |
+| `ssh_hal_test_1` | Second SSH session for HAL service control |
 
 ```yaml
 rackConfig:
@@ -197,8 +197,8 @@ rackConfig:
 ```
 
 > **thermalSensorController:**
-Configure this field according to your test platform. For virtual device testing, use `virtual-thermalsensor-client` as the type and provide the connection details of the device running the vComponent. For physical hardware testing, use the appropriate hardware controller type.
-- `control_port` — The port number where the vComponent accepts temperature injection command requests (default: `8080`).
+Configure this field according to your test platform. For virtual device testing, use `virtual-thermalsensor-client` as the type and provide the connection details of the device running the Thermal Sensor HAL service. For physical hardware testing, use the appropriate hardware controller type.
+- `control_port` — The port number where the Thermal Sensor HAL service accepts temperature injection command requests (default: `8080`).
 
 ---
 
@@ -300,7 +300,7 @@ graph TD
 2. Upload updated YAML to DUT target directory.
 3. Execute `ThermalExceedRecoveryLifecycle` test case on DUT via SSH.
 4. Pre-warm the secondary sensor to its safe temperature (`recovered_threshold − 10°C`).
-5. For each `(from → to)` pair in `transition_states`: inject a temperature value via the vComponent control port that crosses the HFP threshold for the `to` state (`exceeded + 2°C`, `recovered − 2°C`, or `(recovered + exceeded) / 2` for `NORMAL`). For a `NORMAL` transition also reset the secondary sensor to its safe temperature.
+5. For each `(from → to)` pair in `transition_states`: inject a temperature value via the control port that crosses the HFP threshold for the `to` state (`exceeded + 2°C`, `recovered − 2°C`, or `(recovered + exceeded) / 2` for `NORMAL`). For a `NORMAL` transition also reset the secondary sensor to its safe temperature.
 6. If the HFP profile has N > 1 sensors, repeat steps 4–5 for every `(primary, secondary)` permutation where `i ≠ j`.
 7. Collect DUT output and validate pass/fail result.
 
@@ -373,9 +373,9 @@ graph TD
 
 ## Notes
 
-### vComponent Mode
+### Simulator Mode
 
-When testing with the vComponent, temperature injections are performed synthetically via the control plane (HTTP port `8080` by default). The vComponent simulates the vendor thermal policy engine including:
+When testing with the Thermal Sensor HAL simulator, temperature injections are performed synthetically via the control plane (HTTP port `8080` by default). The simulator emulates the vendor thermal policy engine including:
 
 - Per-sensor temperature updates driven by raw Celsius values from the control port
 - Policy evaluation: comparing injected temperature against HFP-defined thresholds (`critical_temperature_recovered_celsius`, `critical_temperature_exceeded_celsius`, `entering_critical_shutdown_celsius`)
