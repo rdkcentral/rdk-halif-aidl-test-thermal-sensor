@@ -31,13 +31,13 @@ thermalsensor:
             0:
                 name: "VTS_L1_THERMALSENSOR"
                 tests:
-                    - "RegisterUnregisterEventListener_Positive"
-                    - "RegisterUnregisterEventListener_MultipleListener"
-                    - "RegisterUnregisterEventListener_Negative"
-                    - "GetCurrentThermalState_ValidStateAndHFPConsistency"
-                    - "GetCurrentTemperatures_CountStructureAndProfileMatch"
+                    - "registerEventListener_pos"
+                    - "registerEventListener_neg"
+                    - "unregisterEventListener_pos"
+                    - "unregisterEventListener_neg"
+                    - "getCurrentThermalState_pos"
+                    - "getCurrentTemperatures_pos"
             1:
                 name: "VTS_L3_THERMALSENSOR"
                 tests:
-                    - "ThermalExceedRecoveryLifecycle"
-                    - "CriticalShutdownWithSuppression"
+                    - "ThermalStateTransition"

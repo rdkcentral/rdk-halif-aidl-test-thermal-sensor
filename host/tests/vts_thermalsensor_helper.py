@@ -172,10 +172,10 @@ class thermalSensorHelperClass(utHelperClass):
             })
         return sensors
 
-    def updateTransitionStates(self, states: list):
+    def updateTransitionStates(self, states: list, suppressionTimeoutMs: int = 0):
         """
-        Patches ``thermalsensor.L3.transition_states`` in the L3 YAML config
-        file in-place with the given ordered state list.
+        Patches ``thermalsensor.L3.transition_states`` (and optionally
+        ``suppression_timeout_ms``) in the L3 YAML config file in-place.
 
         Call this before ``runL3Test`` so the patched YAML is uploaded to the
         target and read by the C++ binary.
@@ -183,11 +183,18 @@ class thermalSensorHelperClass(utHelperClass):
         Args:
             states (list): Ordered list of state name strings, e.g.
                 ``['NORMAL', 'CRITICAL_TEMPERATURE_EXCEEDED', 'CRITICAL_TEMPERATURE_RECOVERED', 'NORMAL']``.
+            suppressionTimeoutMs (int): Value written to
+                ``thermalsensor.L3.suppression_timeout_ms``.  0 disables
+                post-shutdown suppression (TC1 path); > 0 enables it (TC2 path).
+                Defaults to 0.
         """
         data = self.readYaml(self.l3TestConfigFile)
-        data['thermalsensor']['L3']['transition_states'] = list(states)
+        data['thermalsensor']['L3']['transition_states']     = list(states)
+        data['thermalsensor']['L3']['suppression_timeout_ms'] = int(suppressionTimeoutMs)
         self.writeYaml(self.l3TestConfigFile, data)
-        self.log.info(f"[updateTransitionStates] transition_states set to: {states}")
+        self.log.info(
+            f"[updateTransitionStates] transition_states={states} "
+            f"suppression_timeout_ms={suppressionTimeoutMs}")
 
     def runL3Test(self, testcase: str, triggerCallable=None, triggerDelay: float = 25.0) -> bool:
         """

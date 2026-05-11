@@ -175,11 +175,11 @@ class VTS_THERMALSENSOR_L3_CriticalShutdownWithSuppression(thermalSensorHelperCl
 
         self.utilities.change_directory(self.hal_session, self.targetWorkspace)
 
-        # Patch the YAML with TC2's shutdown sequence before uploading to target.
-        self.updateTransitionStates(transitionStates)
+        # Patch the YAML with TC2's shutdown sequence and suppression timeout before uploading to target.
+        self.updateTransitionStates(transitionStates, suppressionTimeoutMs=suppressionMs)
 
         result = self.runL3Test(
-            "CriticalShutdownWithSuppression",
+            "ThermalStateTransition",
             triggerCallable=lambda: self._trigger(
                 sensorName, transitionStates, stateToTemp, suppressionMs),
             triggerDelay=triggerDelay)

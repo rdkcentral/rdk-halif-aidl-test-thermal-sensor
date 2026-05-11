@@ -25,16 +25,14 @@
  * ### L3 Test Cases for Thermal Sensor HAL :
  *
  * Level 3 end-to-end tests driven by raw temperature injections via the
- * UT control plane.  Two tests cover the complete HAL contract:
+ * UT control plane.  A single test covers both scenarios:
  *
- *   ThermalExceedRecoveryLifecycle — NORMAL→EXCEEDED→RECOVERED→NORMAL;
- *     verifies event delivery, monotonic timestamps, aggregation,
- *     idempotent injection, 3-listener fan-out, and listener-gate.
+ *   ThermalStateTransition — driven by transition_states in the L3 YAML.
+ *     If suppressionTimeoutMs == 0: all transitions expect an event (TC1 path).
+ *     If suppressionTimeoutMs  > 0: transitions after CRITICAL_SHUTDOWN_IMMINENT
+ *       expect NO event within suppressionTimeoutMs (TC2 path).
  *
- *   CriticalShutdownWithSuppression — NORMAL→EXCEEDED→SHUTDOWN_IMMINENT;
- *     verifies shutdown delivery and suppression of all subsequent events.
- *
- * **Pre-Conditions:** vcomponent must be running with control-plane enabled @n
+ * **Pre-Conditions:** HAL service must be running with control-plane enabled @n
  * **Dependencies:** UT control-plane @n
  *
  * @endparblock
@@ -89,30 +87,41 @@ public:
     }
 };
 
-/* ========================================================================== */
-/*  Test 1 — TC1: Exceed and Recovery Lifecycle with Aggregation              */
-/* ========================================================================== */
 
 /**
- * @brief TC1 – Verify thermal state transitions as defined by transition_states in the L3 YAML.
+ * @brief Verify thermal state transitions driven by transition_states in the L3 YAML.
  *
- * Covers:
- *  - One listener is sufficient: IThermalSensor fires onThermalStateChange to all
- *    registered listeners for the system-wide state, not per-sensor.
- *  - Verifies initial state is NORMAL via getCurrentThermalState()
- *  - For each consecutive (from, to) pair in transition_states:
- *      - The listener receives the expected state-change event
- *      - timestampMonotonicMs increases monotonically across steps
- *      - getCurrentThermalState() reflects the new state after each event
- *  - Unregisters the listener at the end
+ * Behaviour is controlled entirely by the YAML written by the Python host:
+ *
+ *   suppressionTimeoutMs == 0  (TC1 path — exceed/recovery lifecycle):
+ *     Every consecutive (from→to) pair must produce an event within
+ *     eventTimeoutMs.  Monotonic timestamps and getCurrentThermalState()
+ *     consistency are verified at each step.
+ *
+ *   suppressionTimeoutMs  > 0  (TC2 path — critical shutdown with suppression):
+ *     Steps up to and including CRITICAL_SHUTDOWN_IMMINENT behave as TC1.
+ *     Steps after SHUTDOWN must produce NO event within suppressionTimeoutMs,
+ *     and getCurrentThermalState() must remain CRITICAL_SHUTDOWN_IMMINENT.
  *
  * **Test Group ID:** Basic: 03@n
  * **Test Case ID:** 001@n
  * **Priority:** High@n
+ *
+ * **Pre-Conditions:** HAL service must be running with control-plane enabled@n
+ * **Dependencies:** IThermalSensor, UT control-plane@n
+ * **User Interaction:** None@n
+ *
+ * **Test Procedure:**@n
+ * | Variation / Step | Description | Test Data | Expected Result | Notes |@n
+ * | :----: | --------- | ---------- |-------------- | ----- |@n
+ * | 01 | Assert initial state is NORMAL via getCurrentThermalState(). | input: none | State == NORMAL | Should Pass |@n
+ * | 02 | Drain any stale events from the listener queue. | timeout: 200 ms | No event received | Should Pass |@n
+ * | 03 | For each consecutive (from→to) state pair where to != post-SHUTDOWN: assert event arrives within eventTimeoutMs, event.state matches expected, timestamp is monotonically increasing, and getCurrentThermalState() reflects the new state. | transition_states from YAML; eventTimeoutMs | Event received with correct state and monotonic timestamp | Should Pass |@n
+ * | 04 | (TC2 only, suppressionTimeoutMs > 0) For each state after CRITICAL_SHUTDOWN_IMMINENT: assert NO event arrives within suppressionTimeoutMs and getCurrentThermalState() remains CRITICAL_SHUTDOWN_IMMINENT. | transition_states after SHUTDOWN; suppressionTimeoutMs | No event received; state remains CRITICAL_SHUTDOWN_IMMINENT | Should Pass |@n
  */
-UT_ADD_TEST(VTS_L3_THERMALSENSOR, ThermalExceedRecoveryLifecycle)
+UT_ADD_TEST(VTS_L3_THERMALSENSOR, ThermalStateTransition)
 {
-    const char *testName = "ThermalExceedRecoveryLifecycle";
+    const char *testName = "ThermalStateTransition";
     thermalSensorL3Config_t cfg;
 
     UT_ASSERT_EQUAL_FATAL(
@@ -120,10 +129,8 @@ UT_ADD_TEST(VTS_L3_THERMALSENSOR, ThermalExceedRecoveryLifecycle)
             VTS_THERMALSENSOR_TEST_CONFIG_PATH, gModuleName, gTestGroup, testName, cfg),
         UT_STATUS_OK);
 
-    /* Need at least 2 states to have at least one transition */
     UT_ASSERT_TRUE(cfg.transitionStates.size() >= 2);
 
-    /* Map state name string -> State enum */
     auto toState = [](const std::string& s) -> State {
         if (s == "CRITICAL_TEMPERATURE_EXCEEDED")  return State::CRITICAL_TEMPERATURE_EXCEEDED;
         if (s == "CRITICAL_TEMPERATURE_RECOVERED") return State::CRITICAL_TEMPERATURE_RECOVERED;
@@ -131,109 +138,32 @@ UT_ADD_TEST(VTS_L3_THERMALSENSOR, ThermalExceedRecoveryLifecycle)
         return State::NORMAL;
     };
 
-    size_t sensorCount = gThermalSensorHFP.sensors.size();
-    UT_ASSERT_TRUE(sensorCount > 0);
+    const bool suppressionEnabled = (cfg.suppressionTimeoutMs > 0);
 
-    UT_LOG_INFO("[L3 TC1] HFP has %zu sensor(s), transition sequence has %zu state(s), timeoutMs=%d",
-                sensorCount, cfg.transitionStates.size(), cfg.eventTimeoutMs);
+    UT_LOG_INFO("[L3 ThermalStateTransition] %zu state(s), timeoutMs=%d suppressionMs=%d (%s)",
+                cfg.transitionStates.size(), cfg.eventTimeoutMs, cfg.suppressionTimeoutMs,
+                suppressionEnabled ? "TC2-shutdown" : "TC1-lifecycle");
 
-    /* One listener is sufficient — onThermalStateChange is a system-wide event
-     * delivered to all registered listeners regardless of which sensor triggered it.
-     * The fixture's mListener is already registered in SetUp(). */
     mListener->resetEventQueue();
 
-    /* Drain any stale events */
+    /* Step 02: drain stale events */
     {
-        ActionEvent s;
-        UT_ASSERT_FALSE(mListener->getNextEvent(s, chrono::milliseconds(200)));
+        ActionEvent stale;
+        UT_ASSERT_FALSE(mListener->getNextEvent(stale, chrono::milliseconds(200)));
     }
 
-    /* ---- Verify initial state is NORMAL ---- */
+    /* Step 01: initial state must be NORMAL */
     {
         State initialState;
         THERMALSENSOR_GET_CURRENT_STATE(gTHERMALSENSORHandle, initialState);
         UT_ASSERT_EQUAL(initialState, State::NORMAL);
-        UT_LOG_INFO("[L3 TC1] Initial state confirmed: NORMAL");
+        UT_LOG_INFO("[L3 ThermalStateTransition] Initial state confirmed: NORMAL");
     }
 
-    auto waitMs  = chrono::milliseconds(cfg.eventTimeoutMs);
-    int64_t lastTs = 0;
-
-    /* ---- Iterate each consecutive (from -> to) transition in the config list ---- */
-    for (size_t step = 1; step < cfg.transitionStates.size(); ++step)
-    {
-        const std::string& fromName = cfg.transitionStates[step - 1];
-        const std::string& toName   = cfg.transitionStates[step];
-        State expectedState = toState(toName);
-
-        UT_LOG_INFO("[L3 TC1] step %zu: %s -> %s (waiting up to %dms)",
-                    step, fromName.c_str(), toName.c_str(), cfg.eventTimeoutMs);
-
-        ActionEvent ev;
-        UT_ASSERT_TRUE(mListener->getNextEvent(ev, waitMs));
-        UT_ASSERT_EQUAL(ev.state, expectedState);
-        UT_ASSERT_TRUE(ev.timestampMonotonicMs > lastTs);
-        lastTs = ev.timestampMonotonicMs;
-
-        if (ev.temperatureReading.has_value())
-        {
-            UT_LOG_INFO("[L3 TC1] step %zu: trigger sensor='%s' temp=%.2f",
-                step,
-                android::String8(ev.temperatureReading.value().sensorName).string(),
-                ev.temperatureReading.value().temperatureCelsius);
-        }
-
-        State cur;
-        THERMALSENSOR_GET_CURRENT_STATE(gTHERMALSENSORHandle, cur);
-        UT_ASSERT_EQUAL(cur, expectedState);
-
-        UT_LOG_INFO("[L3 TC1] step %zu OK: state=%s ts=%lld",
-                    step, toName.c_str(), (long long)lastTs);
-    }
-    /* mListener is unregistered by TearDown() */
-}
-
-/**
- * @brief TC2 – Verify critical shutdown trigger and suppression of subsequent transitions.
- *
- * Covers:
- *  - For each consecutive (from, to) pair in transition_states up to and including SHUTDOWN:
- *      the listener receives the expected state-change event with monotonic timestamp.
- *  - For each state after SHUTDOWN in transition_states:
- *      no event must arrive within suppressionTimeoutMs (events are suppressed).
- *  - getCurrentThermalState() remains SHUTDOWN_IMMINENT after suppressed injections.
- *
- * **Test Group ID:** Basic: 03@n
- * **Test Case ID:** 002@n
- * **Priority:** High@n
- */
-UT_ADD_TEST(VTS_L3_THERMALSENSOR, CriticalShutdownWithSuppression)
-{
-    const char *testName = "CriticalShutdownWithSuppression";
-    thermalSensorL3Config_t cfg;
-
-    UT_ASSERT_EQUAL_FATAL(
-        vts_thermalsensor_parse_l3_config(
-            VTS_THERMALSENSOR_TEST_CONFIG_PATH, gModuleName, gTestGroup, testName, cfg),
-        UT_STATUS_OK);
-
-    UT_ASSERT_TRUE(cfg.transitionStates.size() >= 2);
-
-    auto toState = [](const std::string& s) -> State {
-        if (s == "CRITICAL_TEMPERATURE_EXCEEDED")  return State::CRITICAL_TEMPERATURE_EXCEEDED;
-        if (s == "CRITICAL_TEMPERATURE_RECOVERED") return State::CRITICAL_TEMPERATURE_RECOVERED;
-        if (s == "CRITICAL_SHUTDOWN_IMMINENT")      return State::CRITICAL_SHUTDOWN_IMMINENT;
-        return State::NORMAL;
-    };
-
-    UT_LOG_INFO("[L3 TC2] transition sequence has %zu state(s), timeoutMs=%d suppressionMs=%d",
-                cfg.transitionStates.size(), cfg.eventTimeoutMs, cfg.suppressionTimeoutMs);
-
-    mListener->resetEventQueue();
-    auto waitMs       = chrono::milliseconds(cfg.eventTimeoutMs);
-    auto suppressMs   = chrono::milliseconds(cfg.suppressionTimeoutMs);
-    int64_t lastTs    = 0;
-    bool    inShutdown = false;
+    auto waitMs      = chrono::milliseconds(cfg.eventTimeoutMs);
+    auto suppressMs  = chrono::milliseconds(cfg.suppressionTimeoutMs);
+    int64_t lastTs   = 0;
+    bool inShutdown  = false;
 
     for (size_t step = 1; step < cfg.transitionStates.size(); ++step)
     {
@@ -243,9 +173,9 @@ UT_ADD_TEST(VTS_L3_THERMALSENSOR, CriticalShutdownWithSuppression)
 
         if (!inShutdown)
         {
-            /* Before SHUTDOWN: expect the event to arrive */
-            UT_LOG_INFO("[L3 TC2] step %zu: %s -> %s (expect event)",
-                        step, fromName.c_str(), toName.c_str());
+            /* Step 03: expect event */
+            UT_LOG_INFO("[L3 ThermalStateTransition] step %zu: %s -> %s (expect event, timeout=%dms)",
+                        step, fromName.c_str(), toName.c_str(), cfg.eventTimeoutMs);
 
             ActionEvent ev;
             UT_ASSERT_TRUE(mListener->getNextEvent(ev, waitMs));
@@ -257,32 +187,30 @@ UT_ADD_TEST(VTS_L3_THERMALSENSOR, CriticalShutdownWithSuppression)
             THERMALSENSOR_GET_CURRENT_STATE(gTHERMALSENSORHandle, cur);
             UT_ASSERT_EQUAL(cur, expectedState);
 
-            UT_LOG_INFO("[L3 TC2] step %zu OK: state=%s ts=%lld",
+            UT_LOG_INFO("[L3 ThermalStateTransition] step %zu OK: state=%s ts=%lld",
                         step, toName.c_str(), (long long)lastTs);
 
-            if (toName == "CRITICAL_SHUTDOWN_IMMINENT")
+            if (suppressionEnabled && toName == "CRITICAL_SHUTDOWN_IMMINENT")
             {
                 inShutdown = true;
                 mListener->resetEventQueue();
-                UT_LOG_INFO("[L3 TC2] CRITICAL_SHUTDOWN_IMMINENT reached — subsequent injections must be suppressed");
+                UT_LOG_INFO("[L3 ThermalStateTransition] SHUTDOWN reached — subsequent steps must be suppressed");
             }
         }
         else
         {
-            /* After SHUTDOWN: event must be suppressed */
-            UT_LOG_INFO("[L3 TC2] step %zu: %s -> %s (expect SUPPRESSED within %dms)",
+            /* Step 04 (TC2): expect suppression */
+            UT_LOG_INFO("[L3 ThermalStateTransition] step %zu: %s -> %s (expect SUPPRESSED, window=%dms)",
                         step, fromName.c_str(), toName.c_str(), cfg.suppressionTimeoutMs);
 
             ActionEvent ev;
-            bool got = mListener->getNextEvent(ev, suppressMs);
-            UT_ASSERT_FALSE(got);
+            UT_ASSERT_FALSE(mListener->getNextEvent(ev, suppressMs));
 
-            /* State must remain SHUTDOWN_IMMINENT */
             State cur;
             THERMALSENSOR_GET_CURRENT_STATE(gTHERMALSENSORHandle, cur);
             UT_ASSERT_EQUAL(cur, State::CRITICAL_SHUTDOWN_IMMINENT);
 
-            UT_LOG_INFO("[L3 TC2] step %zu OK: %s suppressed, state remains SHUTDOWN_IMMINENT",
+            UT_LOG_INFO("[L3 ThermalStateTransition] step %zu OK: %s suppressed, state remains SHUTDOWN_IMMINENT",
                         step, toName.c_str());
         }
     }

@@ -114,10 +114,10 @@ class VTS_THERMALSENSOR_L3_ThermalExceedRecoveryLifecycle(thermalSensorHelperCla
         """
         self.log.info(
             f"[TC{self.qcId}] primary='{primary['name']}' "
-            f"secondary='{secondary['name']}'")
-        self.updateTransitionStates(transitionStates)
+            f"secondary='{secondary['name']}' (suppression disabled)")
+        self.updateTransitionStates(transitionStates, suppressionTimeoutMs=0)
         return self.runL3Test(
-            "ThermalExceedRecoveryLifecycle",
+            "ThermalStateTransition",
             triggerCallable=lambda pri=primary, sec=secondary, states=transitionStates: self._trigger(pri, sec, states, stateToTempKey),
             triggerDelay=triggerDelay)
 
