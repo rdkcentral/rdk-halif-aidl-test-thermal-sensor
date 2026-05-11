@@ -163,21 +163,21 @@ rackConfig:
             consoles:
               - default:
                   type: "ssh"
-                  port: 5522
+                  port: <port>
                   username: "root"
                   ip: ""
                   password: ""
                   prompt: "~#"
               - ssh_hal_test:
                   type: "ssh"
-                  port: 5522
+                  port: <port>
                   username: "root"
                   ip: ""
                   password: ""
                   prompt: "~#"
               - ssh_hal_test_1:
                   type: "ssh"
-                  port: 5522
+                  port: <port>
                   username: "root"
                   ip: ""
                   password: ""
@@ -185,10 +185,10 @@ rackConfig:
             thermalSensorController:
                 type: virtual-thermalsensor-client
                 vendor: "vComponent"
-                address: "127.0.0.1"
+                address: "ip"
                 username: ""
                 password: ''
-                port: 5522
+                port: <port>
                 control_port: 8080
             outbound:
               download_url: "tftp://tftp-server.com/rack1/slot1/"
