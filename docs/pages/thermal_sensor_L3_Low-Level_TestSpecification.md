@@ -1,375 +1,285 @@
-# Thermal Sensor HAL L3 Low Level Test Specification and Procedure Documentation
+# Thermal Sensor HAL L3 Low Level Test Specification
 
 ## Table of Contents
 
 * [Scope](#scope)
+* [References](#references)
+* [Acronyms, Terms and Abbreviations](#acronyms-terms-and-abbreviations)
 * [Level 3 Test Procedure](#level-3-test-procedure)
 * [Level 3 Test Cases Overview](#level-3-test-cases-overview)
+* [Test Case Details](#test-case-details)
+  * [Test 1: ThermalExceedRecoveryLifecycle](#test-1-thermalexceedrecoverylifecycle)
+  * [Test 2: CriticalShutdownWithSuppression](#test-2-criticalshutdownwithsuppression)
 
 ---
 
 ## Scope
 
-This document describes the Level 3 (L3) Low Level Test Specification for the Thermal Sensor HAL.
+This document describes the Level 3 (L3) Low-Level Test Specification for the Thermal Sensor HAL.
 
-L3 testing validates end-to-end Thermal Sensor HAL functionality using real device operations, including:
+L3 testing validates end-to-end Thermal Sensor HAL functionality using the vComponent with control-plane temperature injection. The test suite exercises:
 
-* Thermal state lifecycle transitions (NORMAL → EXCEEDED → RECOVERED)
-* Critical shutdown trigger behavior
-* Multi-sensor telemetry aggregation and reporting
-* Event callback delivery validation
-* Listener lifecycle management and no-redundant-callback enforcement
+* Thermal state transition lifecycle (NORMAL → CRITICAL_TEMPERATURE_EXCEEDED → CRITICAL_TEMPERATURE_RECOVERED → NORMAL) driven by raw temperature injections
+* Monotonic timestamp ordering across consecutive `onThermalStateChange` events
+* `getCurrentThermalState()` consistency with each delivered event
+* Critical shutdown delivery (`CRITICAL_SHUTDOWN_IMMINENT`) and subsequent event suppression
+* Listener fan-out and listener-gate semantics
 
----
-
-## Level 3 Test Procedure
-
-The L3 Thermal Sensor test suite performs:
-
-1. YAML configuration parsing (thermal thresholds and policy)
-2. Registration of listener interfaces on the DUT
-3. Execution of Thermal Sensor HAL APIs via UT framework
-4. Environmental/simulated temperature manipulation via vComponent
-5. Monitoring thermal state transitions and event callbacks
-6. Validation of reported states, timestamps, and telemetry fields
+L3 tests require external stimulus injected by the Python host via the UT control plane. The DUT-side VTS binary registers the listener, waits for events, and validates results; the Python host drives temperature injections via the vComponent control port.
 
 ---
 
-## Level 3 Test Cases Overview
-
-| Test Case                              | Description                                                                    | HAL APIs                                                         |
-| -------------------------------------- | ------------------------------------------------------------------------------ | ---------------------------------------------------------------- |
-| thermal_exceedAndRecoveryLifecycle     | Validate NORMAL → EXCEEDED → RECOVERED → NORMAL state lifecycle                | `registerEventListener()`, `getCurrentThermalState()`, `onThermalStateChange()` |
-| thermal_criticalShutdownTrigger        | Validate NORMAL → EXCEEDED → SHUTDOWN transition and controlled shutdown       | `registerEventListener()`, `getCurrentThermalState()`, `onThermalStateChange()` |
-| thermal_multiSensorAggregationTelemetry| Validate multi-sensor thermal state aggregation, reporting, and telemetry      | `getCurrentThermalState()`, `getCurrentTemperatures()`           |
-| thermal_eventCallbackDelivery          | Validate asynchronous callback delivery on thermal state transitions           | `registerEventListener()`, `onThermalStateChange()`              |
-| thermal_listenerLifecycleNoRedundant   | Validate callback delivery only while registered and no redundant callbacks    | `registerEventListener()`, `unregisterEventListener()`, `onThermalStateChange()` |
-
----
-
-# Test Case Details
-
----
-
-## Test 1: thermal_exceedAndRecoveryLifecycle
-
-| Title         | Details                                                                                         |
-| ------------- | ----------------------------------------------------------------------------------------------- |
-| Function Name | `thermal_exceedAndRecoveryLifecycle`                                                            |
-| Description   | Validates full thermal lifecycle: NORMAL → CRITICAL_TEMPERATURE_EXCEEDED → CRITICAL_TEMPERATURE_RECOVERED → NORMAL, including monotonic timestamp ordering |
-| Test Group    | 03                                                                                              |
-| Test Case ID  | 001                                                                                             |
-| Priority      | High                                                                                            |
-
-### Pre-Conditions
-
-* Thermal Sensor HAL service must be running
-* Listener interface must be registered before temperature manipulation
-* YAML thermal configuration must define valid `critical_temperature_exceeded_celsius` and `critical_temperature_recovered_celsius` thresholds
-* vComponent must support simulated temperature injection
-
-### Dependencies
-
-* Thermal Sensor HAL Interface: `IThermalSensor`, `IThermalSensorListener`
-* YAML Configuration: thermal policy thresholds
-* UT Framework
-* vComponent for temperature simulation
-
-### User Interaction
-
-No
-
----
-
-### Test Flow Diagram
-
-```mermaid
-graph TD
-    A[Register Listener] --> B{Registration OK?}
-    B -->|No| C[FAIL]
-    B -->|Yes| D[Set Temp above exceeded_celsius]
-    D --> E{EXCEEDED callback received?}
-    E -->|No| F[FAIL]
-    E -->|Yes| G[Set Temp below recovered_celsius]
-    G --> H{RECOVERED callback received?}
-    H -->|No| I[FAIL]
-    H -->|Yes| J[Validate timestamps monotonic]
-    J --> K{Monotonic?}
-    K -->|No| L[FAIL]
-    K -->|Yes| M[Verify state returns NORMAL]
-    M --> N[PASS]
-```
-
----
-
-### Test Procedure
-
-| Step | Description                                    | Test Data                       | Expected Result                                              |
-| ---- | ---------------------------------------------- | ------------------------------- | ------------------------------------------------------------ |
-| 1    | Register thermal event listener                | Valid listener instance         | Registration succeeds                                        |
-| 2    | Inject temperature above `exceeded_celsius`    | temp > exceeded threshold       | `onThermalStateChange` fires with `CRITICAL_TEMPERATURE_EXCEEDED` |
-| 3    | Record timestamp from EXCEEDED event           | `timestampMonotonicMs`          | Timestamp captured                                           |
-| 4    | Inject temperature below `recovered_celsius`   | temp < recovered threshold      | `onThermalStateChange` fires with `CRITICAL_TEMPERATURE_RECOVERED` |
-| 5    | Record timestamp from RECOVERED event          | `timestampMonotonicMs`          | Timestamp is greater than EXCEEDED timestamp                 |
-| 6    | Allow cooldown per recovery policy             | Policy timer                    | State transitions back to `NORMAL`                           |
-| 7    | Call `getCurrentThermalState()`                | N/A                             | Returns `NORMAL`                                             |
-| 8    | Validate monotonic timestamp ordering          | All captured timestamps         | Each successive timestamp is greater than the previous       |
-
----
-
-## Test 2: thermal_criticalShutdownTrigger
-
-| Title         | Details                                                                                         |
-| ------------- | ----------------------------------------------------------------------------------------------- |
-| Function Name | `thermal_criticalShutdownTrigger`                                                               |
-| Description   | Validates device transitions NORMAL → CRITICAL_TEMPERATURE_EXCEEDED → CRITICAL_SHUTDOWN_IMMINENT and initiates controlled shutdown, with monotonic timestamps across events |
-| Test Group    | 03                                                                                              |
-| Test Case ID  | 002                                                                                             |
-| Priority      | High                                                                                            |
-
-### Pre-Conditions
-
-* Thermal Sensor HAL service must be running
-* Listener interface must be registered before temperature manipulation
-* YAML thermal configuration must define valid `entering_critical_shutdown_celsius` threshold
-* vComponent must support simulated temperature injection
-* DUT environment must allow safe simulation of shutdown trigger (may require sandbox)
-
-### Dependencies
-
-* Thermal Sensor HAL Interface: `IThermalSensor`, `IThermalSensorListener`
-* YAML Configuration: shutdown threshold policy
-* UT Framework
-* vComponent for temperature simulation
-
-### User Interaction
-
-No
-
----
-
-### Test Flow Diagram
-
-```mermaid
-graph TD
-    A[Register Listener] --> B{Registration OK?}
-    B -->|No| C[FAIL]
-    B -->|Yes| D[Set Temp above exceeded_celsius]
-    D --> E{EXCEEDED callback received?}
-    E -->|No| F[FAIL]
-    E -->|Yes| G[Set Temp above shutdown_celsius]
-    G --> H{SHUTDOWN_IMMINENT callback received?}
-    H -->|No| I[FAIL]
-    H -->|Yes| J[Validate timestamps monotonic]
-    J --> K{Monotonic?}
-    K -->|No| L[FAIL]
-    K -->|Yes| M[PASS]
-```
-
----
-
-### Test Procedure
-
-| Step | Description                                     | Test Data                       | Expected Result                                                |
-| ---- | ----------------------------------------------- | ------------------------------- | -------------------------------------------------------------- |
-| 1    | Register thermal event listener                 | Valid listener instance         | Registration succeeds                                          |
-| 2    | Inject temperature above `exceeded_celsius`     | temp > exceeded threshold       | `onThermalStateChange` fires with `CRITICAL_TEMPERATURE_EXCEEDED` |
-| 3    | Record timestamp from EXCEEDED event            | `timestampMonotonicMs`          | Timestamp captured                                             |
-| 4    | Inject temperature above `shutdown_celsius`     | temp > shutdown threshold       | `onThermalStateChange` fires with `CRITICAL_SHUTDOWN_IMMINENT` |
-| 5    | Record timestamp from SHUTDOWN event            | `timestampMonotonicMs`          | Timestamp is greater than EXCEEDED timestamp                   |
-| 6    | Validate HAL initiates controlled shutdown      | N/A                             | Controlled shutdown initiated by HAL                           |
-| 7    | Validate monotonic timestamp ordering           | All captured timestamps         | Each successive timestamp is greater than the previous         |
-
----
-
-## Test 3: thermal_multiSensorAggregationTelemetry
-
-| Title         | Details                                                                                         |
-| ------------- | ----------------------------------------------------------------------------------------------- |
-| Function Name | `thermal_multiSensorAggregationTelemetry`                                                       |
-| Description   | Validates multi-sensor thermal state aggregation and telemetry: all sensors reported with correct identifiers, temperature readings accurate and consistent, and aggregated state reflects highest severity |
-| Test Group    | 03                                                                                              |
-| Test Case ID  | 003                                                                                             |
-| Priority      | High                                                                                            |
-
-### Pre-Conditions
-
-* Thermal Sensor HAL service must be running
-* At least two sensor sources (e.g., SoC, Board) must be configured via vComponent
-* YAML configuration must include per-sensor identifiers, thresholds, and vendor metadata
-
-### Dependencies
-
-* Thermal Sensor HAL Interface: `IThermalSensor`
-* YAML Configuration: multi-sensor policy
-* UT Framework
-* vComponent for multi-sensor simulation
-
-### User Interaction
-
-No
-
----
-
-### Test Flow Diagram
-
-```mermaid
-graph TD
-    A[Configure multiple sensors via vComponent] --> B[Inject different temps per sensor]
-    B --> C[Call getCurrentThermalState]
-    C --> D{State = highest severity?}
-    D -->|No| E[FAIL]
-    D -->|Yes| F[Call getCurrentTemperatures]
-    F --> G{All sensors reported?}
-    G -->|No| H[FAIL]
-    G -->|Yes| I[Validate sensorName, location fields]
-    I --> J{Fields correct?}
-    J -->|No| K[FAIL]
-    J -->|Yes| L[Validate vendorCode and vendorInfo]
-    L --> M{Vendor metadata valid?}
-    M -->|No| N[FAIL]
-    M -->|Yes| O[PASS]
-```
-
----
-
-### Test Procedure
-
-| Step | Description                                     | Test Data                                | Expected Result                                                   |
-| ---- | ----------------------------------------------- | ---------------------------------------- | ----------------------------------------------------------------- |
-| 1    | Configure SoC sensor at NORMAL temperature      | temp < exceeded threshold                | Sensor reports NORMAL                                             |
-| 2    | Configure Board sensor above `exceeded_celsius` | temp > exceeded threshold                | Sensor reports CRITICAL_TEMPERATURE_EXCEEDED                      |
-| 3    | Call `getCurrentThermalState()`                 | N/A                                      | Returns `CRITICAL_TEMPERATURE_EXCEEDED` (highest severity)        |
-| 4    | Call `getCurrentTemperatures()`                 | N/A                                      | Returns array with one entry per active sensor                    |
-| 5    | Validate `sensorName` for each record           | Configured sensor names                  | Each record's `sensorName` matches configured identifier          |
-| 6    | Validate `location` for each record             | Configured sensor locations              | Each record's `location` matches configured identifier            |
-| 7    | Validate `temperatureCelsius` accuracy          | Injected temperature values              | Readings match injected values within tolerance                   |
-| 8    | Validate `timestampMonotonicMs`                 | N/A                                      | Non-zero monotonic timestamp                                      |
-| 9    | Validate `vendorCode` and `vendorInfo`          | Configured vendor metadata               | Values match YAML; `vendorInfo` may be null without failure       |
-
----
-
-## Test 4: thermal_eventCallbackDelivery
-
-| Title         | Details                                                                                           |
-| ------------- | ------------------------------------------------------------------------------------------------- |
-| Function Name | `thermal_eventCallbackDelivery`                                                                   |
-| Description   | Validates that the registered listener receives asynchronous callbacks when thermal state transitions occur |
-| Test Group    | 03                                                                                                |
-| Test Case ID  | 004                                                                                               |
-| Priority      | High                                                                                              |
-
-### Pre-Conditions
-
-* Thermal Sensor HAL service must be running
-* Listener must be registered before temperature is manipulated
-* vComponent must support simulated temperature injection
-
-### Dependencies
-
-* Thermal Sensor HAL Interface: `IThermalSensor`, `IThermalSensorListener`
-* UT Framework
-* vComponent for temperature simulation
-
-### User Interaction
-
-No
-
----
-
-### Test Flow Diagram
-
-```mermaid
-graph TD
-    A[Register Listener] --> B{Registration OK?}
-    B -->|No| C[FAIL]
-    B -->|Yes| D[Trigger thermal state change via vComponent]
-    D --> E{Callback received?}
-    E -->|No| F[FAIL]
-    E -->|Yes| G[Validate callback payload]
-    G --> H{state and timestampMonotonicMs valid?}
-    H -->|No| I[FAIL]
-    H -->|Yes| J[PASS]
-```
-
----
-
-### Test Procedure
-
-| Step | Description                                       | Test Data                  | Expected Result                                       |
-| ---- | ------------------------------------------------- | -------------------------- | ----------------------------------------------------- |
-| 1    | Register thermal event listener                   | Valid listener instance     | Registration succeeds                                 |
-| 2    | Inject temperature to trigger state change        | temp > exceeded threshold   | Thermal transition initiated                          |
-| 3    | Wait for asynchronous callback within timeout     | Timeout value               | `onThermalStateChange` callback received              |
-| 4    | Validate `state` field in callback payload        | Valid enum value            | State is a valid `ThermalState` enum                  |
-| 5    | Validate `timestampMonotonicMs` in payload        | Non-zero monotonic value    | Timestamp is non-zero and monotonic                   |
-| 6    | Validate `temperatureReading` in payload          | May be null                 | Field present; null is acceptable per spec            |
-
----
-
-## Test 5: thermal_listenerLifecycleNoRedundant
-
-| Title         | Details                                                                                                  |
-| ------------- | -------------------------------------------------------------------------------------------------------- |
-| Function Name | `thermal_listenerLifecycleNoRedundant`                                                                   |
-| Description   | Validates callbacks are received only for valid state changes while registered, no redundant callbacks are triggered without state change, and no callbacks are received after unregister |
-| Test Group    | 03                                                                                                       |
-| Test Case ID  | 005                                                                                                      |
-| Priority      | High                                                                                                     |
-
-### Pre-Conditions
-
-* Thermal Sensor HAL service must be running
-* vComponent must support simulated temperature injection and stable-temperature hold
-
-### Dependencies
-
-* Thermal Sensor HAL Interface: `IThermalSensor`, `IThermalSensorListener`
-* UT Framework
-* vComponent for temperature simulation
-
-### User Interaction
-
-No
-
----
-
-### Test Flow Diagram
-
-```mermaid
-graph TD
-    A[Register Listener] --> B[Trigger valid state change]
-    B --> C{Callback received?}
-    C -->|No| D[FAIL]
-    C -->|Yes| E[Hold temperature, no state change]
-    E --> F{Redundant callback received?}
-    F -->|Yes| G[FAIL]
-    F -->|No| H[Unregister Listener]
-    H --> I[Trigger another state change]
-    I --> J{Callback received after unregister?}
-    J -->|Yes| K[FAIL]
-    J -->|No| L[PASS]
-```
-
----
-
-### Test Procedure
-
-| Step | Description                                              | Test Data                  | Expected Result                                              |
-| ---- | -------------------------------------------------------- | -------------------------- | ------------------------------------------------------------ |
-| 1    | Register thermal event listener                          | Valid listener instance     | Registration succeeds                                        |
-| 2    | Trigger a valid thermal state transition                 | temp > exceeded threshold   | `onThermalStateChange` callback received                     |
-| 3    | Hold temperature within the same range (no state change) | Stable temperature          | No additional callback received                              |
-| 4    | Unregister the listener                                  | Registered listener         | Unregistration succeeds                                      |
-| 5    | Trigger another thermal state transition                 | temp change                 | No callback received (listener unregistered)                 |
-| 6    | Confirm callback count after unregister                  | Callback counter            | Count unchanged since unregistration                         |
+## Acronyms, Terms and Abbreviations
+
+- `HAL`    - Hardware Abstraction Layer
+- `VTS`    - Vendor Test Suite
+- `L1`     - Level 1 Testing
+- `L2`     - Level 2 Testing
+- `L3`     - Level 3 Testing
+- `DUT`    - Device Under Test
+- `RAFT`   - Rapid Automation Framework for Testing
+- `YAML`   - YAML Ain't Markup Language
+- `AIDL`   - Android Interface Definition Language
+- `HFP`    - Hardware Feature Profile
+- `SoC`    - System on Chip
 
 ---
 
 ## References
 
-* Thermal Sensor HAL High Level Test Specification: [thermal_sensor_High-Level_TestSpecification.md](thermal_sensor_High-Level_TestSpecification.md)
-* Thermal Sensor HAL Interface: `IThermalSensor`, `IThermalSensorListener`
-* YAML thermal policy configuration
+- High Level Test Specification — [thermal_sensor_High_Level_TestSpecification.md](thermal_sensor_High_Level_TestSpecification.md)
+- L2 Test Specification — [thermal_sensor_L2_Low-Level_TestSpecification.md](thermal_sensor_L2_Low-Level_TestSpecification.md)
+- L3 YAML Configuration — [test_configuration/vts_l3_ThermalSensor.yaml](../../test_configuration/vts_l3_ThermalSensor.yaml)
+- HFP Profile — [profiles/hfp-thermalsensor-vcomponent.yaml](../../profiles/hfp-thermalsensor-vcomponent.yaml)
+- Thermal Sensor AIDL Interfaces:
+  - [IThermalSensor](https://github.com/rdkcentral/rdk-halif-aidl/blob/main/sensor/current/com/rdk/hal/sensor/thermal/IThermalSensor.aidl)
+  - [IThermalEventListener](https://github.com/rdkcentral/rdk-halif-aidl/blob/main/sensor/current/com/rdk/hal/sensor/thermal/IThermalEventListener.aidl)
+  - [State](https://github.com/rdkcentral/rdk-halif-aidl/blob/main/sensor/current/com/rdk/hal/sensor/thermal/State.aidl)
+  - [ActionEvent](https://github.com/rdkcentral/rdk-halif-aidl/blob/main/sensor/current/com/rdk/hal/sensor/thermal/ActionEvent.aidl)
+  - [TemperatureReading](https://github.com/rdkcentral/rdk-halif-aidl/blob/main/sensor/current/com/rdk/hal/sensor/thermal/TemperatureReading.aidl)
 
 ---
+
+## Level 3 Test Procedure
+
+The L3 Thermal Sensor test suite operates as follows:
+
+1. Python host calls `updateTransitionStates()` to patch `thermalsensor.L3.transition_states` in the YAML config ([test_configuration/vts_l3_ThermalSensor.yaml](../../test_configuration/vts_l3_ThermalSensor.yaml)) with the test-case-specific state sequence.
+2. Python host uploads the updated YAML to the DUT target directory.
+3. Python host starts the DUT-side VTS binary via SSH (or triggers it within the RAFT framework).
+4. DUT-side VTS parses the YAML, registers the event listener, and waits for `onThermalStateChange` events.
+5. Python host injects synthetic raw temperature values via the vComponent control port to drive vendor-policy-level state transitions.
+6. DUT-side VTS validates received events (state correctness, monotonic timestamp, `getCurrentThermalState()` consistency) and reports pass/fail.
+7. Python host collects the result and logs it.
+
+---
+
+## Level 3 Test Cases Overview
+
+| # | Test Case | Description | HAL APIs |
+|---|-----------|-------------|----------|
+| 1 | `ThermalExceedRecoveryLifecycle` | Validate that state transitions driven by temperature injection follow the expected sequence (`NORMAL → CRITICAL_TEMPERATURE_EXCEEDED → CRITICAL_TEMPERATURE_RECOVERED → NORMAL`), that timestamps are monotonically increasing, and that `getCurrentThermalState()` reflects each new state after its event is delivered. When the HFP profile declares multiple sensors, the test is repeated for every `(primary, secondary)` sensor permutation | `IThermalSensor::registerEventListener()`, `IThermalSensor::unregisterEventListener()`, `IThermalSensor::getCurrentThermalState()`, `IThermalEventListener::onThermalStateChange()` |
+| 2 | `CriticalShutdownWithSuppression` | Validate that the HAL delivers `CRITICAL_SHUTDOWN_IMMINENT` when the shutdown threshold is breached. The Python host drives `NORMAL → CRITICAL_TEMPERATURE_EXCEEDED → CRITICAL_SHUTDOWN_IMMINENT` and verifies each event is received with a monotonically increasing timestamp and `getCurrentThermalState()` consistency | `IThermalSensor::registerEventListener()`, `IThermalSensor::unregisterEventListener()`, `IThermalSensor::getCurrentThermalState()`, `IThermalEventListener::onThermalStateChange()` |
+
+---
+
+## Test Case Details
+
+---
+
+## Test 1: ThermalExceedRecoveryLifecycle
+
+| Title | Details |
+| ----- | ------- |
+| Function Name | `ThermalExceedRecoveryLifecycle` |
+| Description | Validates that the HAL correctly delivers thermal state-change events for each consecutive `(from → to)` pair defined in the `transition_states` YAML sequence. Verifies initial state is `NORMAL`, event states match the configured sequence, `timestampMonotonicMs` is strictly increasing across events, and `getCurrentThermalState()` reflects each new state after delivery. When the HFP profile declares multiple sensors, the Python host repeats the full sequence for every `(primary, secondary)` sensor permutation. Before each sequence the secondary sensor is pre-warmed to a safe temperature to avoid cross-sensor interference |
+| Test Group | 03 |
+| Test Case ID | 001 |
+| Priority | High |
+
+### Pre-Conditions
+
+* Thermal Sensor HAL service must be running.
+* vComponent must be running with the control plane enabled.
+* YAML configuration must be present at the path defined by `VTS_THERMALSENSOR_TEST_CONFIG_PATH`.
+* [test_configuration/vts_l3_ThermalSensor.yaml](../../test_configuration/vts_l3_ThermalSensor.yaml) must have `ThermalExceedRecoveryLifecycle` section populated with at least 2 states.
+* System must start in `NORMAL` thermal state.
+
+### Dependencies
+
+* Thermal Sensor HAL Interfaces: `IThermalSensor`, `IThermalEventListener`
+* Python host test: `vts_thermalsensor_L3_ThermalExceedRecoveryLifecycle.py`
+* UT control plane for temperature injection via vComponent control port
+
+### User Interaction
+
+No
+
+---
+
+### Test Flow Diagram
+
+```mermaid
+graph TD
+    A[Parse YAML Config] --> B{Config Valid — at least 2 states?}
+    B -->|No| C[FAIL]
+    B -->|Yes| D[Register event listener]
+    D --> E[Drain any stale events — 200ms]
+    E --> F[Verify initial state is NORMAL via getCurrentThermalState]
+    F --> G{NORMAL?}
+    G -->|No| H[FAIL]
+    G -->|Yes| I[Python: inject temperature to trigger step 1 transition]
+    I --> J[DUT: wait for onThermalStateChange event]
+    J --> K{Event received within timeout?}
+    K -->|No| L[FAIL]
+    K -->|Yes| M{event.state == expected from YAML?}
+    M -->|No| N[FAIL]
+    M -->|Yes| O{timestampMonotonicMs > previous?}
+    O -->|No| P[FAIL — timestamp not monotonic]
+    O -->|Yes| Q[Verify getCurrentThermalState returns same state]
+    Q --> R{More transitions?}
+    R -->|Yes| I
+    R -->|No| S[Unregister listener — teardown]
+    S --> T[PASS]
+```
+
+---
+
+### Test Procedure
+
+| Step | Description | Test Data | Expected Result |
+| ---- | ----------- | --------- | --------------- |
+| 1 | Python host patches `transition_states` in `vts_l3_ThermalSensor.yaml` via `updateTransitionStates()` and uploads the file to the DUT | `transition_states: [NORMAL, CRITICAL_TEMPERATURE_EXCEEDED, CRITICAL_TEMPERATURE_RECOVERED, NORMAL]` | YAML updated and present on DUT |
+| 2 | Parse YAML configuration for `ThermalExceedRecoveryLifecycle` | `vts_l3_ThermalSensor.yaml` | Config parsed; `transition_states` has ≥ 2 entries |
+| 3 | Register event listener | Valid `IThermalEventListener` | `registerEventListener()` returns `true`; status OK |
+| 4 | Drain any stale events | 200 ms drain window | No events received |
+| 5 | Call `getCurrentThermalState()` and assert result is `NORMAL` | — | State is `NORMAL` |
+| 6 | Python host pre-warms the secondary sensor to its safe temperature (`recovered_threshold − 10°C`) to avoid cross-sensor interference | Safe temperature derived from HFP thresholds | vComponent accepts injection; no state-change event fired |
+| 7 | For each consecutive `(from → to)` pair in `transition_states`: Python host injects a raw temperature value via the control port that crosses the HFP threshold for the `to` state. For a `NORMAL` transition, the secondary sensor is also reset to its safe temperature | Injection temperature derived from HFP thresholds (`exceeded + 2°C`, `recovered − 2°C`, or midpoint for `NORMAL`) | vComponent accepts injection; triggers vendor policy transition |
+| 8 | DUT-side VTS waits for `onThermalStateChange` event within `event_timeout_ms` | `event_timeout_ms` from YAML | Event received before timeout |
+| 9 | Assert `event.state == toState` for the current transition | Expected `State` enum value | Event state matches the `to` state in the YAML sequence |
+| 10 | Assert `event.timestampMonotonicMs > lastTimestampMs` (strictly greater than previous) | Previous and current `timestampMonotonicMs` | Timestamp is monotonically increasing |
+| 11 | Call `getCurrentThermalState()` and assert it matches `event.state` | — | Reported state consistent with delivered event |
+| 12 | If `event.temperatureReading` is non-null, log `sensorName` and `temperatureCelsius` | Optional `TemperatureReading` in `ActionEvent` | No assertion; informational only |
+| 13 | Repeat steps 6–12 for all remaining transitions | — | All transitions pass |
+| 14 | If the HFP profile declares N > 1 sensors, repeat steps 6–13 for every `(primary, secondary)` permutation (`i ≠ j`) | All sensor pairs from HFP profile | All permutations pass |
+| 15 | Listener unregistered by test teardown | Controller handle | `unregisterEventListener()` returns `true` |
+
+---
+
+### YAML Configuration Fields
+
+All L3 tests share a single config block at `thermalsensor.L3`. The Python host patches `transition_states` in-place (via `updateTransitionStates()`) before uploading the file to the DUT for each test case.
+
+```yaml
+thermalsensor:
+  L3:
+    transition_states:
+      - NORMAL
+      - CRITICAL_TEMPERATURE_EXCEEDED
+      - CRITICAL_TEMPERATURE_RECOVERED
+      - NORMAL
+    event_timeout_ms: 15000
+    suppression_timeout_ms: 5000
+```
+
+**State Name Mapping:**
+
+| YAML String | `State` Enum Value |
+|-------------|-------------------|
+| `NORMAL` | `State::NORMAL` |
+| `CRITICAL_TEMPERATURE_EXCEEDED` | `State::CRITICAL_TEMPERATURE_EXCEEDED` |
+| `CRITICAL_TEMPERATURE_RECOVERED` | `State::CRITICAL_TEMPERATURE_RECOVERED` |
+| `CRITICAL_SHUTDOWN_IMMINENT` | `State::CRITICAL_SHUTDOWN_IMMINENT` |
+
+---
+
+## Test 2: CriticalShutdownWithSuppression
+
+| Title | Details |
+| ----- | ------- |
+| Function Name | `CriticalShutdownWithSuppression` |
+| Description | Validates that the HAL delivers thermal state-change events correctly up to and including `CRITICAL_SHUTDOWN_IMMINENT`. The Python host drives `NORMAL → CRITICAL_TEMPERATURE_EXCEEDED → CRITICAL_SHUTDOWN_IMMINENT` and verifies each event is received, timestamps are monotonically increasing, and `getCurrentThermalState()` is consistent with each delivered event. Post-shutdown recovery verification (`_verifyShutdownAndRecovery`) is a planned future extension (currently a stub) |
+| Test Group | 03 |
+| Test Case ID | 002 |
+| Priority | High |
+
+### Pre-Conditions
+
+* Thermal Sensor HAL service must be running.
+* vComponent must be running with the control plane enabled.
+* YAML configuration must be present at the path defined by `VTS_THERMALSENSOR_TEST_CONFIG_PATH`.
+* [test_configuration/vts_l3_ThermalSensor.yaml](../../test_configuration/vts_l3_ThermalSensor.yaml) must have a valid `thermalsensor.L3` config block. The Python host patches `transition_states` to `[NORMAL, CRITICAL_TEMPERATURE_EXCEEDED, CRITICAL_SHUTDOWN_IMMINENT]` before running this test.
+* System must start in `NORMAL` thermal state.
+
+### Dependencies
+
+* Thermal Sensor HAL Interfaces: `IThermalSensor`, `IThermalEventListener`
+* Python host test: `vts_thermalsensor_L3_CriticalShutdownWithSuppression.py`
+* UT control plane for temperature injection via vComponent control port
+
+### User Interaction
+
+No
+
+---
+
+### Test Flow Diagram
+
+```mermaid
+graph TD
+    A[Python: patch YAML transition_states to NORMAL→EXCEEDED→SHUTDOWN] --> B[Parse YAML Config]
+    B --> C{Config Valid — at least 2 states?}
+    C -->|No| D[FAIL]
+    C -->|Yes| E[Register event listener]
+    E --> F[Python: inject temperature for NORMAL→EXCEEDED transition]
+    F --> G[DUT: wait for onThermalStateChange event]
+    G --> H{Event received — state == CRITICAL_TEMPERATURE_EXCEEDED?}
+    H -->|No| I[FAIL]
+    H -->|Yes| J{timestampMonotonicMs > previous?}
+    J -->|No| K[FAIL — timestamp not monotonic]
+    J -->|Yes| L[Verify getCurrentThermalState == CRITICAL_TEMPERATURE_EXCEEDED]
+    L --> M[Python: inject temperature for EXCEEDED→SHUTDOWN transition]
+    M --> N[DUT: wait for onThermalStateChange event]
+    N --> O{Event received — state == CRITICAL_SHUTDOWN_IMMINENT?}
+    O -->|No| P[FAIL]
+    O -->|Yes| Q[Verify getCurrentThermalState == CRITICAL_SHUTDOWN_IMMINENT]
+    Q --> R[Unregister listener — teardown]
+    R --> S[PASS]
+```
+
+---
+
+### Test Procedure
+
+| Step | Description | Test Data | Expected Result |
+| ---- | ----------- | --------- | --------------- |
+| 1 | Python host patches `transition_states` in `vts_l3_ThermalSensor.yaml` to `[NORMAL, CRITICAL_TEMPERATURE_EXCEEDED, CRITICAL_SHUTDOWN_IMMINENT]` via `updateTransitionStates()` and uploads the file to the DUT | `vts_l3_ThermalSensor.yaml` | YAML updated and present on DUT |
+| 2 | Parse YAML configuration for `CriticalShutdownWithSuppression` | `vts_l3_ThermalSensor.yaml` | Config parsed; `transition_states` contains at least 2 entries |
+| 3 | Register event listener | Valid `IThermalEventListener` | `registerEventListener()` returns `true`; status OK |
+| 4 | Python host injects a temperature above `critical_temperature_exceeded_celsius` to trigger `NORMAL → CRITICAL_TEMPERATURE_EXCEEDED` | `exceeded_threshold + 2°C` from HFP | Event received; `event.state == CRITICAL_TEMPERATURE_EXCEEDED`; `timestampMonotonicMs > 0` |
+| 5 | Call `getCurrentThermalState()` and assert `CRITICAL_TEMPERATURE_EXCEEDED` | — | State confirmed as `CRITICAL_TEMPERATURE_EXCEEDED` |
+| 6 | Python host injects a temperature above `entering_critical_shutdown_celsius` to trigger `CRITICAL_TEMPERATURE_EXCEEDED → CRITICAL_SHUTDOWN_IMMINENT` | `shutdown_threshold + 2°C` from HFP | Event received; `event.state == CRITICAL_SHUTDOWN_IMMINENT`; `timestampMonotonicMs > previous` |
+| 7 | Call `getCurrentThermalState()` and assert `CRITICAL_SHUTDOWN_IMMINENT` | — | State confirmed as `CRITICAL_SHUTDOWN_IMMINENT` |
+| 8 | Listener unregistered by test teardown | Controller handle | `unregisterEventListener()` returns `true` |
+
+> **Note:** Post-shutdown recovery verification (ping-test, cooldown wait, boot-reason check via `IBoot.getBootReason()`) is a planned future extension tracked in `_verifyShutdownAndRecovery()`. It is not exercised in the current test run.
+
+---
+
+### YAML Configuration Fields
+
+The Python host patches the shared `thermalsensor.L3` block before running TC2. The `transition_states` are overwritten to the fixed 3-state shutdown sequence:
+
+```yaml
+thermalsensor:
+  L3:
+    transition_states:
+      - NORMAL
+      - CRITICAL_TEMPERATURE_EXCEEDED
+      - CRITICAL_SHUTDOWN_IMMINENT
+    event_timeout_ms: 15000
+    suppression_timeout_ms: 5000
+```
+
+**Note on `suppression_timeout_ms`:** Parsed from YAML for future use by `_verifyShutdownAndRecovery()`. Not consumed by the current TC2 C++ test body since no post-shutdown states appear in the patched sequence.
