@@ -24,9 +24,8 @@ This repository contains the Test Suites(`L1` , `L2` and `L3`) for Thermal Senso
 
 |SNo|Document Name|Document Description|Document Link|
 |---|-------------|--------------------|-------------|
-|1|`HAL` Specification Document|This document provides specific information on the APIs for which tests are written in this module|[HAL Interface](https://github.com/rdkcentral/rdk-halif-aidl/blob/0.14.0/README.md)|
+|1|`HAL` Specification Document|This document provides specific information on the APIs for which tests are written in this module|[HAL Interface](https://github.com/rdkcentral/rdk-halif-aidl/blob/0.15.0/README.md)|
 |2|High Level Test Specification|High Level Test Specification Documentation for the Thermal Sensor `HAL`|[thermal_sensor_High_Level_TestSpecification.md](docs/pages/thermal_sensor_High_Level_TestSpecification.md)|
-|3|`L2` Low Level Test Specification|`L2` Low Level Test Specification and Procedure Documentation for the Thermal Sensor `HAL`|[thermal_sensor_L2_Low-Level_TestSpecification.md](docs/pages/thermal_sensor_L2_Low-Level_TestSpecification.md)|
-|4|`L3` Low Level Test Specification|`L3` Low Level Test Specification for the Thermal Sensor `HAL`|[thermal_sensor_L3_Low-Level_TestSpecification.md](docs/pages/thermal_sensor_L3_Low-Level_TestSpecification.md)|
-|5|`L1` `L2` and `L3` Test procedure document|This document contains Build Instructions and `L1` `L2` and `L3` Test procedure for the Thermal Sensor `HAL`|[vts_thermal_sensor_L1_L2_L3_TestProcedure.md](docs/pages/vts_thermal_sensor_L1_L2_L3_TestProcedure.md)|
+|3|`L3` Low Level Test Specification|`L3` Low Level Test Specification for the Thermal Sensor `HAL`|[thermal_sensor_L3_Low-Level_TestSpecification.md](docs/pages/thermal_sensor_L3_Low-Level_TestSpecification.md)|
+|4|`L1` `L2` and `L3` Test procedure document|This document contains Build Instructions and `L1` `L2` and `L3` Test procedure for the Thermal Sensor `HAL`|[vts_thermal_sensor_L1_L2_L3_TestProcedure.md](docs/pages/vts_thermal_sensor_L1_L2_L3_TestProcedure.md)|
 
