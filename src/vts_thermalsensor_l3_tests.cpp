@@ -48,6 +48,10 @@
 #include "vts_thermalsensor_parse_hfp.h"
 #include "vts_thermalsensor_parse_testconfig.h"
 
+using namespace std;
+using namespace std::chrono;
+using namespace com::rdk::hal::sensor::thermal;
+
 extern android::sp<IThermalSensor> gTHERMALSENSORHandle;
 
 static const char *gModuleName = "thermalsensor";

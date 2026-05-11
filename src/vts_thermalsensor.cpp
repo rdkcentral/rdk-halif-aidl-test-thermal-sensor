@@ -24,6 +24,10 @@
 #include "vts_thermalsensor.h"
 #include "vts_thermalsensor_helper_functions.h"
 
+using namespace std;
+using namespace std::chrono;
+using namespace com::rdk::hal::sensor::thermal;
+
 /* ========================================================================== */
 /*  ThermalSensorEventListener Implementations                                */
 /* ========================================================================== */

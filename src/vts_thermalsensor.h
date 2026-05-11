@@ -71,6 +71,7 @@
 #include <binder/ProcessState.h>
 #include <binder/IPCThreadState.h>
 #include <binder/Status.h>
+#include <utils/String8.h>
 #include <utils/String16.h>
 
 #include "com/rdk/hal/sensor/thermal/BnThermalEventListener.h"
@@ -86,9 +87,6 @@ using android::sp;
 using android::String16;
 using android::defaultServiceManager;
 using android::binder::Status;
-using namespace std;
-using namespace std::chrono;
-using namespace com::rdk::hal::sensor::thermal;
 
 #define MAX_EVENT_WAIT_MS   15000
 
@@ -110,7 +108,7 @@ using namespace com::rdk::hal::sensor::thermal;
 #define THERMALSENSOR_REGISTER_EVENT_SUCCESS(sensorHandle, listener) \
     do { \
         ::android::binder::Status status; \
-        bool _aidl_return; \
+        bool _aidl_return = false; \
         UT_LOG_DEBUG("Calling registerEventListener(IN:listener[%p], OUT:_aidl_return[])", listener.get()); \
         status = (sensorHandle)->registerEventListener(listener, &_aidl_return); \
         UT_LOG_DEBUG("Result registerEventListener(IN:listener[%p], OUT:_aidl_return[%s]), status:[isOK:%s, exception:%s]", \
@@ -126,7 +124,7 @@ using namespace com::rdk::hal::sensor::thermal;
 #define THERMALSENSOR_REGISTER_EVENT_FAILURE(sensorHandle, listener, expectedException) \
     do { \
         ::android::binder::Status status; \
-        bool _aidl_return; \
+        bool _aidl_return = false; \
         UT_LOG_DEBUG("Calling registerEventListener(IN:listener[%p], OUT:_aidl_return[])", \
             (listener ? listener.get() : nullptr)); \
         status = (sensorHandle)->registerEventListener(listener, &_aidl_return); \
@@ -146,7 +144,7 @@ using namespace com::rdk::hal::sensor::thermal;
 #define THERMALSENSOR_UNREGISTER_EVENT_SUCCESS(sensorHandle, listener) \
     do { \
         ::android::binder::Status status; \
-        bool _aidl_return; \
+        bool _aidl_return = false; \
         UT_LOG_DEBUG("Calling unregisterEventListener(IN:listener[%p], OUT:_aidl_return[])", listener.get()); \
         status = (sensorHandle)->unregisterEventListener(listener, &_aidl_return); \
         UT_LOG_DEBUG("Result unregisterEventListener(IN:listener[%p], OUT:_aidl_return[%s]), status:[isOK:%s, exception:%s]", \
@@ -162,7 +160,7 @@ using namespace com::rdk::hal::sensor::thermal;
 #define THERMALSENSOR_UNREGISTER_EVENT_FAILURE(sensorHandle, listener, expectedException) \
     do { \
         ::android::binder::Status status; \
-        bool _aidl_return; \
+        bool _aidl_return = false; \
         UT_LOG_DEBUG("Calling unregisterEventListener(IN:listener[%p], OUT:_aidl_return[])", \
             (listener ? listener.get() : nullptr)); \
         status = (sensorHandle)->unregisterEventListener(listener, &_aidl_return); \
@@ -215,7 +213,7 @@ using namespace com::rdk::hal::sensor::thermal;
  * Queues received ActionEvents so that test code can inspect them
  * with or without a timeout.
  */
-class ThermalSensorEventListener : public BnThermalEventListener
+class ThermalSensorEventListener : public com::rdk::hal::sensor::thermal::BnThermalEventListener
 {
 public:
     ThermalSensorEventListener() {}
@@ -224,15 +222,15 @@ public:
     android::binder::Status onThermalStateChange(
         const ::com::rdk::hal::sensor::thermal::ActionEvent& event) override;
 
-    bool getNextEvent(ActionEvent& outEvent);
-    bool getNextEvent(ActionEvent& outEvent, chrono::milliseconds timeout);
+    bool getNextEvent(com::rdk::hal::sensor::thermal::ActionEvent& outEvent);
+    bool getNextEvent(com::rdk::hal::sensor::thermal::ActionEvent& outEvent, std::chrono::milliseconds timeout);
     bool hasEvent();
     void resetEventQueue();
 
 private:
-    mutex mEventMutex;
-    condition_variable mEventCv;
-    queue<ActionEvent> mEventQueue;
+    std::mutex mEventMutex;
+    std::condition_variable mEventCv;
+    std::queue<com::rdk::hal::sensor::thermal::ActionEvent> mEventQueue;
 };
 
 #endif // __VTS_THERMALSENSOR_H__

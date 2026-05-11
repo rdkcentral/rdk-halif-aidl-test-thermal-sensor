@@ -70,6 +70,6 @@ class actualThermalSensor(ThermalSensorControllerInterface):
             bool: True if the operator confirmed the temperature was reached.
         """
         return self.testUserResponse.getUserYN(
-            f"Set sensor '{sensorName}' to {temperatureCelsius} Celcius on the hardware. "
+            f"Set sensor '{sensorName}' to {temperatureCelsius} Celsius on the hardware. "
             f"Has the temperature been reached? (Y/N):"
         )

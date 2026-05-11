@@ -64,9 +64,16 @@ UT_status_t vts_thermalsensor_parse_l3_config(
      * testName is kept only for log messages. */
     const std::string node = std::string(module) + "." + testGroup;
 
-    config.eventTimeoutMs      = (int32_t)ut_kvp_getUInt32Field(kvp, (node + ".event_timeout_ms").c_str());
+    const int32_t defaultEventTimeoutMs      = 15000;
+    const int32_t defaultSuppressionTimeoutMs = 5000;
+
+    config.eventTimeoutMs = (int32_t)ut_kvp_getUInt32Field(kvp, (node + ".event_timeout_ms").c_str());
+    if (config.eventTimeoutMs <= 0)
+        config.eventTimeoutMs = defaultEventTimeoutMs;
+
     config.suppressionTimeoutMs = (int32_t)ut_kvp_getUInt32Field(kvp, (node + ".suppression_timeout_ms").c_str());
-    if (config.suppressionTimeoutMs <= 0) config.suppressionTimeoutMs = 5000;
+    if (config.suppressionTimeoutMs <= 0)
+        config.suppressionTimeoutMs = defaultSuppressionTimeoutMs;
 
     /* Read the ordered transition_states list */
     const std::string listKey = node + ".transition_states";

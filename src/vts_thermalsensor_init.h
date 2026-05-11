@@ -27,8 +27,7 @@
 /**
  * @brief Initialize the Thermal Sensor VTS test suite.
  *
- * Binds to the IThermalSensor binder service, starts the binder thread pool,
- * and parses the HFP profile.
+ * Binds to the IThermalSensor binder service and parses the HFP profile.
  */
 void VTS_THERMALSENSOR_init(void);
 

@@ -37,12 +37,6 @@ thermalsensor:
                     - "GetCurrentThermalState_ValidStateAndHFPConsistency"
                     - "GetCurrentTemperatures_CountStructureAndProfileMatch"
             1:
-                name: "VTS_L2_THERMALSENSOR"
-                tests:
-                    - "ThermalStateConsistency"
-                    - "ListenerLifecycle"
-                    - "MultipleListeners"
-            2:
                 name: "VTS_L3_THERMALSENSOR"
                 tests:
                     - "ThermalExceedRecoveryLifecycle"

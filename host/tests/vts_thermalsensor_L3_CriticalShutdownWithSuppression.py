@@ -102,11 +102,11 @@ class VTS_THERMALSENSOR_L3_CriticalShutdownWithSuppression(thermalSensorHelperCl
             if not inShutdown:
                 self.log.info(
                     f"[TC{self.qcId}] {prevState} -> {state}: inject '{sensorName}' "
-                    f"at {injectTemp} Celcius (expect event)")
+                    f"at {injectTemp} Celsius (expect event)")
                 self.thermalSensorDevice.injectTemperatureUpdate(
                     sensorName=sensorName,
                     temperatureCelsius=injectTemp)
-                delay = INTER_PHASE_DELAY_S * 2 if state == 'SHUTDOWN' else INTER_PHASE_DELAY_S
+                delay = INTER_PHASE_DELAY_S * 2 if state == 'CRITICAL_SHUTDOWN_IMMINENT' else INTER_PHASE_DELAY_S
                 time.sleep(delay)
 
                 if state == 'CRITICAL_SHUTDOWN_IMMINENT':
@@ -114,7 +114,7 @@ class VTS_THERMALSENSOR_L3_CriticalShutdownWithSuppression(thermalSensorHelperCl
             else:
                 self.log.info(
                     f"[TC{self.qcId}] {prevState} -> {state}: inject '{sensorName}' "
-                    f"at {injectTemp} Celcius (expect SUPPRESSED)")
+                    f"at {injectTemp} Celsius (expect SUPPRESSED)")
                 self.thermalSensorDevice.injectTemperatureUpdate(
                     sensorName=sensorName,
                     temperatureCelsius=injectTemp)
@@ -133,11 +133,20 @@ class VTS_THERMALSENSOR_L3_CriticalShutdownWithSuppression(thermalSensorHelperCl
         with open(self.l3TestConfigFile, 'r') as fh:
             l3cfg = yaml.safe_load(fh)
 
-        # TC2 verifies NORMAL -> EXCEEDED -> CRITICAL_SHUTDOWN_IMMINENT only.
-        # After CRITICAL_SHUTDOWN_IMMINENT the system shuts down autonomously;
-        # recovery is not expected and subsequent state transitions are suppressed.
+        # TC2 drives NORMAL -> EXCEEDED -> CRITICAL_SHUTDOWN_IMMINENT (pre-shutdown
+        # phase, each event must be delivered), then injects additional states that
+        # the vcomponent must SUPPRESS after shutdown is reached.  The C++ binary
+        # waits suppressionTimeoutMs for each post-shutdown injection and asserts
+        # that no event arrives.
         testNode         = l3cfg['thermalsensor']['L3']
-        transitionStates = ['NORMAL', 'CRITICAL_TEMPERATURE_EXCEEDED', 'CRITICAL_SHUTDOWN_IMMINENT']
+        transitionStates = [
+            'NORMAL',
+            'CRITICAL_TEMPERATURE_EXCEEDED',
+            'CRITICAL_SHUTDOWN_IMMINENT',
+            # Post-shutdown states — injections must be suppressed by the vcomponent.
+            'CRITICAL_TEMPERATURE_RECOVERED',
+            'NORMAL',
+        ]
         timeoutMs        = int(testNode.get('event_timeout_ms', 15000))
         suppressionMs    = int(testNode.get('suppression_timeout_ms', 5000))
 
@@ -160,8 +169,9 @@ class VTS_THERMALSENSOR_L3_CriticalShutdownWithSuppression(thermalSensorHelperCl
 
         self.log.info(
             f"[TC{self.qcId}] sensor='{sensorName}' states={transitionStates} "
-            f"exceeded={s['over_temp']} Celcius shutdown={s['shutdown_temp']} Celcius "
-            f"recovered={s['recovery_temp']} Celcius suppressionMs={suppressionMs}")
+            f"exceeded={s['over_temp']} Celsius shutdown={s['shutdown_temp']} Celsius "
+            f"recovered={s['recovery_temp']} Celsius normal={s['normal_temp']} Celsius "
+            f"suppressionMs={suppressionMs}")
 
         self.utilities.change_directory(self.hal_session, self.targetWorkspace)
 

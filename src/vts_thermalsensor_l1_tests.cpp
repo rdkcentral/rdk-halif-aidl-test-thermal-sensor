@@ -41,6 +41,9 @@
 #include "vts_thermalsensor.h"
 #include <inttypes.h>
 
+using namespace std;
+using namespace com::rdk::hal::sensor::thermal;
+
 extern sp<IThermalSensor> gTHERMALSENSORHandle;
 
 UT_ADD_TEST_TO_GROUP(VTS_L1_THERMALSENSOR, UT_TESTS_L1)
@@ -117,7 +120,7 @@ UT_ADD_TEST(VTS_L1_THERMALSENSOR, RegisterUnregisterEventListener_Positive)
  *  3. Unregister all listeners in reverse order — each must succeed.
  *
  * **Test Group ID:** Basic: 01@n
- * **Test Case ID:** 00@n
+ * **Test Case ID:** 002@n
  * **Priority:** High@n
  */
 UT_ADD_TEST(VTS_L1_THERMALSENSOR, RegisterUnregisterEventListener_MultipleListener)
@@ -135,8 +138,11 @@ UT_ADD_TEST(VTS_L1_THERMALSENSOR, RegisterUnregisterEventListener_MultipleListen
         THERMALSENSOR_REGISTER_EVENT_SUCCESS(gTHERMALSENSORHandle, l);
 
     // Step 3: unregister all listeners in reverse order — each must succeed
-    for (auto& l : listeners)
+    for (auto it = listeners.rbegin(); it != listeners.rend(); ++it)
+    {
+        auto& l = *it;
         THERMALSENSOR_UNREGISTER_EVENT_SUCCESS(gTHERMALSENSORHandle, l);
+    }
 }
 
 /**
@@ -323,8 +329,8 @@ UT_ADD_TEST(VTS_L1_THERMALSENSOR, GetCurrentTemperatures_CountStructureAndProfil
         UT_ASSERT_TRUE(currentReading.temperatureCelsius >= -273.15);
         // timestampMonotonicMs must be >= 0 (0 is valid before first live event)
         UT_ASSERT_TRUE(currentReading.timestampMonotonicMs >= 0);
-        UT_LOG_INFO("[L1 GetCurrentTemperatures_CountStructureAndProfileMatch] [%zu] sensor='%s' timestampMonotonicMs=%" PRId64,
-                    i, android::String8(currentReading.sensorName).c_str(), currentReading.timestampMonotonicMs);
+        UT_LOG_INFO("[L1 GetCurrentTemperatures_CountStructureAndProfileMatch] [%zu] sensor='%s' timestampMonotonicMs=" PRId64,
+                    i, android::String8(currentReading.sensorName).string(), currentReading.timestampMonotonicMs);
 
         // Find matching HFP sensor by name
         const thermalSensorHFPSensor_t* hfp = getHFPSensorByName(
@@ -357,8 +363,8 @@ UT_ADD_TEST(VTS_L1_THERMALSENSOR, GetCurrentTemperatures_CountStructureAndProfil
             UT_LOG_INFO("[L1 GetCurrentTemperatures_CountStructureAndProfileMatch] [%zu] sensor='%s' location='%s' "
                         "temp=%.2f (range [%.2f, %.2f]) vendorCode=%d",
                         i,
-                        android::String8(currentReading.sensorName).c_str(),
-                        android::String8(currentReading.location).c_str(),
+                        android::String8(currentReading.sensorName).string(),
+                        android::String8(currentReading.location).string(),
                         currentReading.temperatureCelsius,
                         hfp->sensorReadingMinCelsius,
                         hfp->sensorReadingMaxCelsius,
@@ -368,7 +374,7 @@ UT_ADD_TEST(VTS_L1_THERMALSENSOR, GetCurrentTemperatures_CountStructureAndProfil
         {
             UT_LOG_INFO("[L1 GetCurrentTemperatures_CountStructureAndProfileMatch] [%zu] sensor='%s' temp=%.2f (no HFP entry)",
                         i,
-                        android::String8(currentReading.sensorName).c_str(),
+                        android::String8(currentReading.sensorName).string(),
                         currentReading.temperatureCelsius);
         }
     }

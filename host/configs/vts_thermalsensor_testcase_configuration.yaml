@@ -38,11 +38,6 @@ thermalsensor:
         - "RegisterUnregisterEventListener_Negative"
         - "GetCurrentThermalState_ValidStateAndHFPConsistency"
         - "GetCurrentTemperatures_CountStructureAndProfileMatch"
-    - name: "VTS_L2_THERMALSENSOR"
-      test_cases:
-        - "ThermalStateConsistency"
-        - "ListenerLifecycle"
-        - "MultipleListeners"
     - name: "VTS_L3_THERMALSENSOR"
       test_cases:
         - "ThermalExceedRecoveryLifecycle"

@@ -66,7 +66,7 @@ class VTS_THERMALSENSOR_L3_ThermalExceedRecoveryLifecycle(thermalSensorHelperCla
 
         # Reset secondary to its safe temperature before the sequence
         self.log.info(
-            f"[TC{self.qcId}] Pre-warm: '{sec['name']}' at {sec['safe_temp']} Celcius")
+            f"[TC{self.qcId}] Pre-warm: '{sec['name']}' at {sec['safe_temp']} Celsius")
 
         self.thermalSensorDevice.injectTemperatureUpdate(
             sensorName=sec['name'],
@@ -85,7 +85,7 @@ class VTS_THERMALSENSOR_L3_ThermalExceedRecoveryLifecycle(thermalSensorHelperCla
 
             injectTemp = pri[tempKey]
             self.log.info(
-                f"[TC{self.qcId}] Step {step}: '{pri['name']}' at {injectTemp} Celcius "
+                f"[TC{self.qcId}] Step {step}: '{pri['name']}' at {injectTemp} Celsius "
                 f"({prevState} -> {state})")
             self.thermalSensorDevice.injectTemperatureUpdate(
                 sensorName=pri['name'],
@@ -96,7 +96,7 @@ class VTS_THERMALSENSOR_L3_ThermalExceedRecoveryLifecycle(thermalSensorHelperCla
             if state == 'NORMAL':
                 self.log.info(
                     f"[TC{self.qcId}] Step {step}b: '{sec['name']}' at "
-                    f"{sec['safe_temp']} Celcius (secondary reset for NORMAL)")
+                    f"{sec['safe_temp']} Celsius (secondary reset for NORMAL)")
                 self.thermalSensorDevice.injectTemperatureUpdate(
                     sensorName=sec['name'],
                     temperatureCelsius=sec['safe_temp'])
@@ -148,10 +148,19 @@ class VTS_THERMALSENSOR_L3_ThermalExceedRecoveryLifecycle(thermalSensorHelperCla
         with open(self.l3TestConfigFile, 'r') as fh:
             l3cfg = yaml.safe_load(fh)
 
-        # Read the shared L3 config block; transition_states already match TC1.
-        testNode         = l3cfg['thermalsensor']['L3']
-        transitionStates = testNode.get('transition_states', [])
-        timeoutMs        = int(testNode.get('event_timeout_ms', 15000))
+        testNode  = l3cfg['thermalsensor']['L3']
+        timeoutMs = int(testNode.get('event_timeout_ms', 15000))
+
+        # TC1 always uses the fixed exceed-and-recovery sequence regardless of
+        # what is currently stored in the YAML (which may have been patched by
+        # a prior TC2 run).  updateTransitionStates() in _runSensorPair will
+        # overwrite the YAML with this sequence before uploading to the DUT.
+        transitionStates = [
+            'NORMAL',
+            'CRITICAL_TEMPERATURE_EXCEEDED',
+            'CRITICAL_TEMPERATURE_RECOVERED',
+            'NORMAL',
+        ]
 
         sensors = self.getSensorListFromHFP()
 

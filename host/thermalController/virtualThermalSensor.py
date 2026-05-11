@@ -34,27 +34,20 @@ class virtualThermalSensor(ThermalSensorControllerInterface):
 
     def _sendCommand(self, payload: dict):
         """
-        Serialises *payload* as YAML, writes it to a temp file on the device
-        via a bash heredoc, then POSTs it to the vcomponent control-plane.
+        Serialises *payload* as YAML and POSTs it inline to the vcomponent
+        control-plane, matching the deepsleep virtual-controller pattern.
 
         Args:
             payload (dict): Command payload to serialise and POST.
         """
         yaml_str = yaml.dump(payload)
-        tmp = "/tmp/ts_cp.yaml"
-
-        # Write YAML to a temp file using a bash heredoc.
-        # session.write(list) sends each element as a separate line.
-        heredoc_lines = [f"cat > {tmp} << 'YAML_EOF'"]
-        heredoc_lines.extend(yaml_str.rstrip("\n").splitlines())
-        heredoc_lines.append("YAML_EOF")
-        self.session.write(heredoc_lines)
-
-        # POST the file — no quoting issues, newlines preserved exactly.
-        self.session.write(
-            f'curl -s -X POST -H "Content-Type: application/x-yaml" '
-            f'--data-binary @{tmp} "http://localhost:{self.port}/api/postKVP"'
+        yaml_str = yaml_str.replace('"', '\\"')
+        cmd = (
+            f'curl -X POST -H "Content-Type: application/x-yaml" '
+            f'--data-binary "{yaml_str}" '
+            f'"http://localhost:{self.port}/api/postKVP"'
         )
+        self.session.write(cmd)
 
     def triggerThermalStateChange(self, state: str, sensorName: str = "",
                                   temperatureCelsius: float = 0.0,
