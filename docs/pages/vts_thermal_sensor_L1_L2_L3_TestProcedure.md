@@ -332,15 +332,15 @@ Validates that the HAL correctly delivers `CRITICAL_SHUTDOWN_IMMINENT` upon shut
 
 ```mermaid
 graph TD
-    A[Python: patch YAML transition_states to NORMAL→EXCEEDED→SHUTDOWN] --> B[Python: Upload YAML to DUT]
+    A[Python: patch YAML transition_states to NORMAL→CRITICAL_TEMPERATURE_EXCEEDED→CRITICAL_SHUTDOWN_IMMINENT] --> B[Python: Upload YAML to DUT]
     B --> C[Python: Start DUT VTS — CriticalShutdownWithSuppression]
     C --> D[DUT: register listener]
-    D --> E[Python: inject temperature for NORMAL→EXCEEDED]
-    E --> F[DUT: receive and validate EXCEEDED event]
+    D --> E[Python: inject temperature for NORMAL→CRITICAL_TEMPERATURE_EXCEEDED]
+    E --> F[DUT: receive and validate CRITICAL_TEMPERATURE_EXCEEDED event]
     F --> G{Event correct — monotonic timestamp?}
     G -->|No| H[FAIL]
-    G -->|Yes| I[Python: inject temperature for EXCEEDED→SHUTDOWN]
-    I --> J[DUT: receive and validate SHUTDOWN_IMMINENT event]
+    G -->|Yes| I[Python: inject temperature for CRITICAL_TEMPERATURE_EXCEEDED→CRITICAL_SHUTDOWN_IMMINENT]
+    I --> J[DUT: receive and validate CRITICAL_SHUTDOWN_IMMINENT event]
     J --> K{Event correct — monotonic timestamp?}
     K -->|No| L[FAIL]
     K -->|Yes| M[DUT: verify getCurrentThermalState == CRITICAL_SHUTDOWN_IMMINENT]
@@ -365,9 +365,9 @@ graph TD
 
 | Phase | Condition | Expected |
 |-------|-----------|----------|
-| NORMAL → EXCEEDED | Temperature injection crosses `critical_temperature_exceeded_celsius` | `onThermalStateChange` fired with `CRITICAL_TEMPERATURE_EXCEEDED`; `timestampMonotonicMs > 0` |
-| EXCEEDED → SHUTDOWN | Temperature injection crosses `entering_critical_shutdown_celsius` | `onThermalStateChange` fired with `CRITICAL_SHUTDOWN_IMMINENT`; `timestampMonotonicMs` strictly greater than previous |
-| After SHUTDOWN | `getCurrentThermalState()` call | Returns `CRITICAL_SHUTDOWN_IMMINENT` |
+| NORMAL → CRITICAL_TEMPERATURE_EXCEEDED | Temperature injection crosses `critical_temperature_exceeded_celsius` | `onThermalStateChange` fired with `CRITICAL_TEMPERATURE_EXCEEDED`; `timestampMonotonicMs > 0` |
+| CRITICAL_TEMPERATURE_EXCEEDED → CRITICAL_SHUTDOWN_IMMINENT | Temperature injection crosses `entering_critical_shutdown_celsius` | `onThermalStateChange` fired with `CRITICAL_SHUTDOWN_IMMINENT`; `timestampMonotonicMs` strictly greater than previous |
+| After CRITICAL_SHUTDOWN_IMMINENT | `getCurrentThermalState()` call | Returns `CRITICAL_SHUTDOWN_IMMINENT` |
 
 ---
 
@@ -436,8 +436,8 @@ thermalsensor:
   L3:
     transition_states:
       - NORMAL
-      - EXCEEDED
-      - RECOVERED
+      - CRITICAL_TEMPERATURE_EXCEEDED
+      - CRITICAL_TEMPERATURE_RECOVERED
       - NORMAL
     event_timeout_ms: 15000
     suppression_timeout_ms: 5000
