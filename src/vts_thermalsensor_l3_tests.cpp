@@ -142,7 +142,7 @@ UT_ADD_TEST(VTS_L3_THERMALSENSOR, ThermalStateTransition)
         if (s == "NORMAL")
             return State::NORMAL;
         UT_LOG_ERROR("[L3 ThermalStateTransition] Unknown state string in config: '%s'", s.c_str());
-        UT_ASSERT_TRUE_FATAL(false);
+        UT_ASSERT_TRUE(false);
         return State::NORMAL; /* unreachable; silences compiler warning */
     };
 
