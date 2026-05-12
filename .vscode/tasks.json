@@ -1,0 +1,18 @@
+{
+  "version": "2.0.0",
+  "tasks": [
+    {
+      "label": "Patch interactiveShell.py for Windows",
+      "type": "shell",
+      "command": "bash",
+      "args": [
+        "-c",
+        "if [[ $(uname -s) == MINGW* ]]; then sed -i \"s/^[[:space:]]*import pty/#import pty/\" \"${workspaceFolder}/host/raft/framework/plugins/ut_raft/interactiveShell.py\" && sed -i \"s/^[[:space:]]*import fcntl/#import fcntl/\" \"${workspaceFolder}/host/raft/framework/plugins/ut_raft/interactiveShell.py\"; fi"
+      ],
+      "options": {
+        "cwd": "${workspaceFolder}"
+      },
+      "problemMatcher": []
+    }
+  ]
+}
