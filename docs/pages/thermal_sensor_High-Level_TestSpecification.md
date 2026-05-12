@@ -69,7 +69,7 @@ Therefore, all functional and behavioral validation—including callback deliver
 ## Validation Constraints
 
 ### Thermal Threshold Ordering (Mandatory)
-recovered < exceeded < shutdown
+`critical_temperature_recovered_celsius` < `critical_temperature_exceeded_celsius` < `entering_critical_shutdown_celsius`
 
 ### Recovery Policy Requirements
 - `CRITICAL_TEMPERATURE_RECOVERED` is emitted only after temperature falls below the recovered threshold
