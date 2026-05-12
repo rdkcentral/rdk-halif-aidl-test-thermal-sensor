@@ -62,6 +62,7 @@ void VTS_THERMALSENSOR_init(void)
     if (vts_thermalsensor_getService() != UT_STATUS_OK)
     {
         UT_LOG_ERROR("Failed to get ThermalSensor service");
+        UT_ASSERT_TRUE_FATAL(false);
         return;
     }
 

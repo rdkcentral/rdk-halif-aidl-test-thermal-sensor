@@ -131,11 +131,19 @@ UT_ADD_TEST(VTS_L3_THERMALSENSOR, ThermalStateTransition)
 
     UT_ASSERT_TRUE(cfg.transitionStates.size() >= 2);
 
-    auto toState = [](const std::string& s) -> State {
-        if (s == "CRITICAL_TEMPERATURE_EXCEEDED")  return State::CRITICAL_TEMPERATURE_EXCEEDED;
-        if (s == "CRITICAL_TEMPERATURE_RECOVERED") return State::CRITICAL_TEMPERATURE_RECOVERED;
-        if (s == "CRITICAL_SHUTDOWN_IMMINENT")      return State::CRITICAL_SHUTDOWN_IMMINENT;
-        return State::NORMAL;
+    auto toState = [](const std::string& s) -> State
+    {
+        if (s == "CRITICAL_TEMPERATURE_EXCEEDED")
+            return State::CRITICAL_TEMPERATURE_EXCEEDED;
+        if (s == "CRITICAL_TEMPERATURE_RECOVERED")
+            return State::CRITICAL_TEMPERATURE_RECOVERED;
+        if (s == "CRITICAL_SHUTDOWN_IMMINENT")
+            return State::CRITICAL_SHUTDOWN_IMMINENT;
+        if (s == "NORMAL")
+            return State::NORMAL;
+        UT_LOG_ERROR("[L3 ThermalStateTransition] Unknown state string in config: '%s'", s.c_str());
+        UT_ASSERT_TRUE_FATAL(false);
+        return State::NORMAL; /* unreachable; silences compiler warning */
     };
 
     const bool suppressionEnabled = (cfg.suppressionTimeoutMs > 0);
