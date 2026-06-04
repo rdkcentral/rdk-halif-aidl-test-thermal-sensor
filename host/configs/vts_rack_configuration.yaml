@@ -40,7 +40,7 @@ rackConfig:
             name: "slot1"
             devices:
                 - dut:
-                    ip: "127.0.0.1"
+                    ip: ""
                     description: "VTV"
                     platform: "vDevice"
                     consoles:
@@ -68,7 +68,7 @@ rackConfig:
                     thermalSensorController:
                         type: virtual-thermalsensor-client
                         vendor: "vComponent"
-                        address: "127.0.0.1" # IP address of the target device
+                        address: "" # IP address of the target device
                         username: ""         # Login username
                         password: ''         # Login password
                         port: 5522
