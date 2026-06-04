@@ -55,15 +55,14 @@ static UT_status_t vts_thermalsensor_getService()
     return UT_STATUS_OK;
 }
 
-void VTS_THERMALSENSOR_init(void)
+UT_status_t VTS_THERMALSENSOR_init(void)
 {
     UT_LOG_INFO("VTS_THERMALSENSOR_init: Binding to IThermalSensor service");
 
     if (vts_thermalsensor_getService() != UT_STATUS_OK)
     {
         UT_LOG_ERROR("Failed to get ThermalSensor service");
-        UT_ASSERT_TRUE_FATAL(false);
-        return;
+        return UT_STATUS_FAILURE;
     }
 
     UT_LOG_INFO("VTS_THERMALSENSOR_init: Successfully connected to IThermalSensor");
@@ -72,6 +71,7 @@ void VTS_THERMALSENSOR_init(void)
     vts_thermalsensor_parse_hfp();
 
     UT_LOG_INFO("VTS_THERMALSENSOR_init: Initialization complete");
+    return UT_STATUS_OK;
 }
 
 void VTS_THERMALSENSOR_destroy(void)

@@ -29,7 +29,7 @@
  *
  * Binds to the IThermalSensor binder service and parses the HFP profile.
  */
-void VTS_THERMALSENSOR_init(void);
+UT_status_t VTS_THERMALSENSOR_init(void);
 
 /**
  * @brief Destroy/cleanup the Thermal Sensor VTS test suite.
