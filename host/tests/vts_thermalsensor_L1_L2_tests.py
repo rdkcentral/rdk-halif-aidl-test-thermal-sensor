@@ -45,13 +45,13 @@ class VTS_THERMALSENSOR_L1_L2_Tests(thermalSensorHelperClass):
     Collects and aggregates test results for pass/fail reporting.
     """
 
-    def __init__(self, log: logModule = None):
+    def __init__(self, log: logModule = None, moduleName: str = None):
         """
         Initializes the test class.
         """
         qcId = "1"
         self.testName = "ThermalSensor_L1_L2"
-        super().__init__(self.testName, qcId, log)
+        super().__init__(self.testName, qcId, log, moduleName)
 
         self.testCaseConfiguration = ConfigRead(
             THERMALSENSOR_TESTCASES_CONFIGURATION_FILE, self.moduleName)

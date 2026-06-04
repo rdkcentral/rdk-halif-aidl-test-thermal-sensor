@@ -51,7 +51,7 @@ rackConfig:
                             ip: ""      # IP address of the target device
                             password: ""
                             prompt: "~#"
-                        - ssh_hal_test:
+                        - ssh_hal_test_0:
                             type: "ssh"
                             port: 5522
                             username: ""

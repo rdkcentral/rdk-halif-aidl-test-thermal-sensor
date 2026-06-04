@@ -45,8 +45,15 @@ class thermalSensorHelperClass(utHelperClass):
     Handles artifact deployment, session setup, and control-plane trigger helpers.
     """
 
-    def __init__(self, testName: str, qcId: str, log: logModule = None):
-        self.moduleName = "thermalsensor"
+    def __init__(
+        self,
+        testName: str,
+        qcId: str,
+        log: logModule = None,
+        moduleName: str = None,
+    ):
+        self.moduleName = "thermalsensor" if moduleName is None else moduleName
+        isUnifiedTest = False if moduleName is None else True
         self.interfaceName = "thermalsensor"
         super().__init__(testName, qcId, log)
 
@@ -55,30 +62,58 @@ class thermalSensorHelperClass(utHelperClass):
             self.log = logModule(self.__class__.__name__)
             self.log.setLevel(self.log.INFO)
 
-        # Parse device configuration
+        # Parse device configuration first (used by path selection below)
         self.deviceTestSetup = self.cpe.get("test")
-        self.targetWorkspace = os.path.join(
-            self.cpe.get("target_directory"), self.moduleName)
-        self.moduleHFPFile = os.path.join(
-            dir_path, self.deviceTestSetup.get("profile"))
-        profileOnTarget = os.path.join(
-            self.targetWorkspace, "profiles",
-            os.path.basename(self.moduleHFPFile)).replace("\\", "/")
         self.waitTime = self.cpe.get("wait_time")
         self.platform = self.cpe.get("platform")
+        self.targetWorkspace = os.path.join(
+            self.cpe.get("target_directory"), self.moduleName)
+
+        component_root = os.path.normpath(os.path.join(dir_path, "../.."))
+        unified_root = os.path.normpath(os.path.join(dir_path, "../../../.."))
+
+        if not isUnifiedTest:
+            self.paths = {
+                "testMenuConfigFile": THERMALSENSOR_TEST_MENU_CONFIGURATION_FILE,
+                "l3TestConfigFile": THERMALSENSOR_L3_TEST_CONFIG_FILE,
+                "moduleHFPFile": os.path.join(dir_path, self.deviceTestSetup.get("profile")),
+            }
+            artifactBaseDir = dir_path
+            targetCfgBase = self.targetWorkspace
+        else:
+            self.paths = {
+                "testMenuConfigFile": os.path.join(
+                    unified_root, "host/tests/TestCases/vts_l3_test_setup.yaml"
+                ),
+                "l3TestConfigFile": os.path.join(
+                    component_root, "test_configuration/vts_l3_ThermalSensor.yaml"
+                ),
+                "moduleHFPFile": os.path.join(
+                    component_root, "profiles/hfp-thermalsensor-vcomponent.yaml"
+                ),
+            }
+            artifactBaseDir = os.path.join(component_root, "host")
+            targetCfgBase = os.path.join(self.targetWorkspace, "bin").replace("\\", "/")
+
+        for attr, path in self.paths.items():
+            normalized_path = os.path.normpath(path).replace("\\", "/")
+            setattr(self, attr, normalized_path)
+            self.paths[attr] = normalized_path
+
+        profileOnTarget = os.path.join(
+            targetCfgBase, "profiles", os.path.basename(self.paths["moduleHFPFile"])
+        ).replace("\\", "/")
 
         # Load test menu configuration
-        controllerPort = self.deviceTestSetup.get("controller_port", 8080)
-        self.l3TestConfigFile = THERMALSENSOR_L3_TEST_CONFIG_FILE
+        controllerPort = self.deviceTestSetup.get("thermalsensor_controller_port", 8081)
         self.testMenuConfiguration = ConfigRead(
-            THERMALSENSOR_TEST_MENU_CONFIGURATION_FILE, self.moduleName)
+            self.paths["testMenuConfigFile"], self.moduleName)
         self.testMenuConfiguration.test.execute = (
             self.testMenuConfiguration.test.execute + f" -p {profileOnTarget}")
         self.l3TestConfigFolder = os.path.join(
-            self.targetWorkspace, "test_configuration").replace("\\", "/")
+            targetCfgBase, "test_configuration").replace("\\", "/")
 
-        # Establish HAL session (test binary) and a second session for vcomponent
-        self.hal_session = self.dut.getConsoleSession("ssh_hal_test")
+        self.hal_session = self.dut.getConsoleSession("ssh_hal_test_0")
         self.hal_session_1 = self.dut.getConsoleSession("ssh_hal_test_1")
 
         # Initialize UT menu navigator and utilities
@@ -89,7 +124,7 @@ class thermalSensorHelperClass(utHelperClass):
         # Copy required artifacts to target device
         self.utilities.change_directory(self.hal_session, self.targetWorkspace)
         for artifact in self.testMenuConfiguration.test.artifacts:
-            filesPath = os.path.join(dir_path, artifact)
+            filesPath = os.path.normpath(os.path.join(artifactBaseDir, artifact))
             self.utilities.sftpCopy(
                 self.hal_session, filesPath, self.targetWorkspace)
             if tarfile.is_tarfile(filesPath):
@@ -100,14 +135,9 @@ class thermalSensorHelperClass(utHelperClass):
                     self.hal_session, targetTarfile, self.targetWorkspace)
 
         self.vcomponentLogFile = "/tmp/vcomponent_thermalsensor.log"
-        self.utilities.change_directory(
-            self.hal_session_1, self.targetWorkspace)
-        self.hal_session_1.write(
-            f"pkill -f {self.cpe.get('thermalsensor_process_name')} 2>/dev/null; sleep 1")
-        time.sleep(1)
-        self.hal_session_1.write(
-            f"./{self.cpe.get('thermalsensor_process_name')} --port {controllerPort} "
-            f"> {self.vcomponentLogFile} 2>&1 &")
+        self.targetWorkspace = targetCfgBase
+        self.utilities.change_directory(self.hal_session, self.targetWorkspace)
+        self.utilities.change_directory(self.hal_session_1, self.targetWorkspace)
         time.sleep(2)
 
         self.thermalSensorDevice = ThermalSensorController(
@@ -149,7 +179,7 @@ class thermalSensorHelperClass(utHelperClass):
         Returns:
             list: One dict per sensor in HFP profile order.
         """
-        with open(self.moduleHFPFile, 'r') as fh:
+        with open(self.paths["moduleHFPFile"], 'r') as fh:
             hfp = yaml.safe_load(fh)
 
         sensors = []
@@ -188,10 +218,10 @@ class thermalSensorHelperClass(utHelperClass):
                 post-shutdown suppression (TC1 path); > 0 enables it (TC2 path).
                 Defaults to 0.
         """
-        data = self.readYaml(self.l3TestConfigFile)
+        data = self.readYaml(self.paths["l3TestConfigFile"])
         data['thermalsensor']['L3']['transition_states']     = list(states)
         data['thermalsensor']['L3']['suppression_timeout_ms'] = int(suppressionTimeoutMs)
-        self.writeYaml(self.l3TestConfigFile, data)
+        self.writeYaml(self.paths["l3TestConfigFile"], data)
         self.log.info(
             f"[updateTransitionStates] transition_states={states} "
             f"suppression_timeout_ms={suppressionTimeoutMs}")
@@ -217,7 +247,7 @@ class thermalSensorHelperClass(utHelperClass):
             bool: True if the test passed, False otherwise.
         """
         self.utilities.sftpCopy(
-            self.hal_session, self.l3TestConfigFile, self.l3TestConfigFolder)
+            self.hal_session, self.paths["l3TestConfigFile"], self.paths["l3TestConfigFolder"])
         self.utMenu.start()
 
         triggerThread = None
@@ -272,4 +302,4 @@ class thermalSensorHelperClass(utHelperClass):
             self.log.info(f"--- end vcomponent logs for {testcase} ---")
             self.hal_session_1.write(f"> {self.vcomponentLogFile}")
         except Exception as exc:
-            self.log.warn(f"[vcomponent log capture] Could not read log file: {exc}")
+            self.log.warning(f"[vcomponent log capture] Could not read log file: {exc}")

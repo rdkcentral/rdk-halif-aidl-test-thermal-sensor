@@ -32,21 +32,5 @@ check_process()
     return $?
 }
 
-start_vcomponent_service()
-{
-    ${RUN_DIR}/$SERVICE_NAME &
-    vcomponentservice_pid=$!
-    # Wait for service to be ready
-    sleep 1
-
-    echo "Started vComponent ${SERVICE_NAME} (PID: $vcomponentservice_pid)"
-}
-
-if check_process $SERVICE_NAME; then
-    echo "Continuing with existing ${SERVICE_NAME} (PID: $(pgrep -f $SERVICE_NAME))"
-else
-    start_vcomponent_service
-fi
-
 echo "Executing [vts_thermalsensor_hal_test]"
 "${RUN_DIR}/vts_thermalsensor_hal_test" "$@"
