@@ -55,6 +55,7 @@ class thermalSensorHelperClass(utHelperClass):
         self.moduleName = "thermalsensor" if moduleName is None else moduleName
         isUnifiedTest = False if moduleName is None else True
         self.interfaceName = "thermalsensor"
+
         super().__init__(testName, qcId, log)
 
         self.log = log
@@ -71,7 +72,7 @@ class thermalSensorHelperClass(utHelperClass):
 
         component_root = os.path.normpath(os.path.join(dir_path, "../.."))
         unified_root = os.path.normpath(os.path.join(dir_path, "../../../.."))
-
+        self.halServiceLogFile = "/tmp/thermalsensor_service.log"
         if not isUnifiedTest:
             self.paths = {
                 "testMenuConfigFile": THERMALSENSOR_TEST_MENU_CONFIGURATION_FILE,
@@ -134,7 +135,6 @@ class thermalSensorHelperClass(utHelperClass):
                 self.utilities.untar(
                     self.hal_session, targetTarfile, self.targetWorkspace)
 
-        self.vcomponentLogFile = "/tmp/vcomponent_thermalsensor.log"
         self.targetWorkspace = targetCfgBase
         self.utilities.change_directory(self.hal_session, self.targetWorkspace)
         self.utilities.change_directory(self.hal_session_1, self.targetWorkspace)
@@ -226,6 +226,22 @@ class thermalSensorHelperClass(utHelperClass):
             f"[updateTransitionStates] transition_states={states} "
             f"suppression_timeout_ms={suppressionTimeoutMs}")
 
+    def resetAllSensorsToNormal(self):
+        """
+        Directly forces the vcomponent state to NORMAL for every sensor in the
+        HFP profile.  Call this after a test that ends in a non-NORMAL state
+        (e.g. CRITICAL_SHUTDOWN_IMMINENT) so the next test starts cleanly.
+        """
+        sensors = self.getSensorListFromHFP()
+        for s in sensors:
+            self.log.info(
+                f"[resetAllSensorsToNormal] Resetting '{s['name']}' to NORMAL")
+            self.thermalSensorDevice.triggerThermalStateChange(
+                state="NORMAL",
+                sensorName=s['name'],
+                temperatureCelsius=s['normal_temp'])
+            time.sleep(0.5)
+
     def runL3Test(self, testcase: str, triggerCallable=None, triggerDelay: float = 25.0) -> bool:
         """
         Uploads the L3 config YAML to the target, starts the test binary, fires
@@ -268,38 +284,8 @@ class thermalSensorHelperClass(utHelperClass):
         if results is None:
             results = False
 
-        self._emitVcomponentLogs(testcase)
 
         self.log.stepResult(
             results,
             f"Test Suite: {THERMALSENSOR_L3_TEST_SUITE_NAME}  Test Case: {testcase}")
         return results
-
-    def _emitVcomponentLogs(self, testcase: str):
-        """
-        Reads the vcomponent log file from the target via hal_session_1 and emits
-        each line into the VTS log, then truncates the file so the next test case
-        sees only its own output.
-
-        Args:
-            testcase (str): Test case name, used only for the log header.
-        """
-        try:
-            prompt = self.cpe.get("prompt", "~#")
-            self.hal_session_1.write(f"cat {self.vcomponentLogFile}")
-            logContent = self.hal_session_1.read_until(prompt, timeout=5)
-            self.log.info(f"--- vcomponent logs for {testcase} ---")
-            import re
-            _ansiRe = re.compile(r'\x1b\[[0-9;]*[mK]')
-            for line in logContent.splitlines():
-                stripped = _ansiRe.sub('', line).strip()
-                if stripped:
-                    # Replace non-ASCII characters (e.g. → arrows) so the
-                    # message can be encoded on any platform (including
-                    # Windows cp1252 terminals).
-                    safe = stripped.encode('ascii', errors='replace').decode('ascii')
-                    self.log.info(f"[vcomponent] {safe}")
-            self.log.info(f"--- end vcomponent logs for {testcase} ---")
-            self.hal_session_1.write(f"> {self.vcomponentLogFile}")
-        except Exception as exc:
-            self.log.warning(f"[vcomponent log capture] Could not read log file: {exc}")

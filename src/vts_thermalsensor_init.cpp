@@ -21,6 +21,7 @@
  * @file vts_thermalsensor_init.cpp
  */
 
+#include <ut.h>
 #include "vts_thermalsensor_init.h"
 #include "vts_thermalsensor.h"
 #include "vts_thermalsensor_parse_hfp.h"

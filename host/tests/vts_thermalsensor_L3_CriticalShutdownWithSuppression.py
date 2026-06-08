@@ -185,6 +185,8 @@ class VTS_THERMALSENSOR_L3_CriticalShutdownWithSuppression(thermalSensorHelperCl
             triggerDelay=triggerDelay)
 
         result = result and self._verifyShutdownAndRecovery()
+        # Reset all sensors to NORMAL so subsequent tests start from a clean state.
+        self.resetAllSensorsToNormal()
         return result
 
 if __name__ == "__main__":

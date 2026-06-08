@@ -24,6 +24,7 @@
 #ifndef __VTS_THERMALSENSOR_INIT_H__
 #define __VTS_THERMALSENSOR_INIT_H__
 
+#include <ut.h>
 /**
  * @brief Initialize the Thermal Sensor VTS test suite.
  *
