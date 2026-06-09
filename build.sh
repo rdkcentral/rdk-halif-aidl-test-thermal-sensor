@@ -205,30 +205,6 @@ build_ut_core()
 }
 
 ###############################################################################
-# Function to Build vcomponent services
-###############################################################################
-build_vcomponent_services()
-{
-    if [ ! -d ${VCOMPONENT_DIR} ]; then
-        git clone -b $VCOMPONENT_THERMALSENSOR_VERSION 'git@github.com:rdkcentral/rdk-aidl-vcomponent-thermal-sensor.git' $VCOMPONENT_DIR
-        if [ $? -ne 0 ]; then
-            echo -e "${BOLD}╔══════════════════════════════════════════════╗${RESET}"
-            echo -e "${BOLD}* ${RED}Failed to clone Thermal sensor vcomponent.${RESET}"
-            echo -e "${BOLD}╚══════════════════════════════════════════════╝${RESET}"
-            exit 1
-        fi
-    fi
-
-    make -j"$(nproc)" -C "${VCOMPONENT_DIR}" BUILD_DIR="${TOP_BUILD_DIR}" UT_CORE_DIR="${UT_CORE_DIR}"
-    if [ $? -ne 0 ]; then
-        echo -e "${BOLD}╔══════════════════════════════════════════════════════════╗${RESET}"
-        echo -e "${BOLD}* ${RED}Failed to build the vcomponent Service. Exiting.${RESET}"
-        echo -e "${BOLD}╚══════════════════════════════════════════════════════════╝${RESET}"
-        exit 1
-    fi
-}
-
-###############################################################################
 # Function to Build HALIF test
 ###############################################################################
 build_halif_test()
@@ -327,7 +303,6 @@ elif [[ "$1" == [Tt]arget=* ]]; then
     build_aidl_libs
     build_ut_core
     build_halif_test
-    build_vcomponent_services
     install_test
     echo -e "${BOLD}╔════════════════════════════════╗${RESET}"
     echo -e "${BOLD}* ${GREEN}Build Successful${RESET}               ${BOLD}*${RESET}"
