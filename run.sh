@@ -24,13 +24,5 @@ SERVICE_NAME=Vendor-ThermalSensor
 
 export LD_LIBRARY_PATH=${RUN_DIR}:${LD_LIBRARY_PATH}
 
-# Function to check if a process is running
-check_process()
-{
-    local process_name=$1
-    pgrep -f "$process_name" > /dev/null
-    return $?
-}
-
 echo "Executing [vts_thermalsensor_hal_test]"
 "${RUN_DIR}/vts_thermalsensor_hal_test" "$@"

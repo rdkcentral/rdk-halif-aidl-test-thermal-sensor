@@ -284,7 +284,6 @@ class thermalSensorHelperClass(utHelperClass):
         if results is None:
             results = False
 
-
         self.log.stepResult(
             results,
             f"Test Suite: {THERMALSENSOR_L3_TEST_SUITE_NAME}  Test Case: {testcase}")
