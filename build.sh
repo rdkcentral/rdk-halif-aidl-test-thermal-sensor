@@ -30,7 +30,6 @@ RESET='\033[0m'
 declare -r TOP=`dirname $(realpath $0)`
 declare -r HALIF_VERSION=current
 RDK_HALIF_AIDL_VERSION="${RDK_HALIF_AIDL_VERSION="main"}"
-VCOMPONENT_THERMALSENSOR_VERSION="${VCOMPONENT_THERMALSENSOR_VERSION="main"}"
 RDK_HALIF_TEST_BASE_URL="https://github.com/rdkcentral/rdk-halif-binder-test-"
 
 declare -A HALIF_COMPONENTS=(
@@ -48,7 +47,6 @@ declare -r BUILD_INSTALL_PREFIX=${TOP_BUILD_DIR}/usr
 declare -r AIDL_LIB_DIR=${TOP}/aidl_lib
 declare -r RDK_HAL_DIR=${TOP}/rdk-halif-aidl
 declare -r PROFILES_DIR=${TOP}/profiles
-declare -r VCOMPONENT_DIR=${TOP}/vcomponent
 
 OUT_TAR_FILE=vts-thermalsensor.tar.gz
 
@@ -231,7 +229,6 @@ install_test()
     install -t ${INSTALL_PATH} run.sh
 
     cp -r ${PROFILES_DIR} ${INSTALL_PATH}
-    cp -r "${VCOMPONENT_DIR}/vcomponent_configurations" ${INSTALL_PATH}
     cp -r "${TOP}/test_configuration" ${INSTALL_PATH}
 
     cd ${INSTALL_PATH}
@@ -247,7 +244,6 @@ clean_test()
     echo -e "${BOLD}removing *.o${RESET}"
 
     make clean
-    make -C ${VCOMPONENT_DIR} clean
     make -C ${AIDL_LIB_DIR} clean
 
     rm -rf ${TOP_BUILD_DIR}/bin/${OUT_TAR_FILE}
@@ -262,7 +258,6 @@ dist_clean_test()
     rm -rf $TOP_BUILD_DIR
     rm -rf $RDK_HAL_DIR
     rm -rf ${UT_CORE_DIR}
-    rm -rf ${VCOMPONENT_DIR}
 }
 
 ###############################################################################
@@ -284,7 +279,6 @@ help()
 echo -e "${BOLD}${GREEN}VTS Version                  : ${RESET}${YELLOW}$(git rev-parse --abbrev-ref HEAD)${RESET}"
 echo -e "${BOLD}${GREEN}UT_CORE_VERSION              : ${RESET}${YELLOW}$UT_CORE_VERSION${RESET}"
 echo -e "${BOLD}${GREEN}RDK_HALIF_AIDL_VERSION       : ${RESET}${YELLOW}$RDK_HALIF_AIDL_VERSION${RESET}"
-echo -e "${BOLD}${GREEN}VCOMPONENT_THERMALSENSOR_VERSION : ${RESET}${YELLOW}$VCOMPONENT_THERMALSENSOR_VERSION${RESET}"
 echo -e "${BOLD}${GREEN}AIDL_BIN                     : ${RESET}${YELLOW}$AIDL_BIN${RESET}"
 echo -e "${BOLD}${GREEN}LINUX_BINDER_OUT_DIR         : ${RESET}${YELLOW}$LINUX_BINDER_OUT_DIR${RESET}"
 
