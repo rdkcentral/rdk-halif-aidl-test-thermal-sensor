@@ -65,14 +65,6 @@ rackConfig:
                             ip: ""      # IP address of the target device (vcomponent session)
                             password: ""
                             prompt: "~#"
-                    thermalSensorController:
-                        type: virtual-thermalsensor-client
-                        vendor: "vComponent"
-                        address: "" # IP address of the target device
-                        username: ""         # Login username
-                        password: ''         # Login password
-                        port: 5522
-                        control_port: 8080
                     outbound:
                         workspaceDirectory: "./logs/workspace"
                         download_url: "tftp://tftp-server.com/rack1/slot1/"

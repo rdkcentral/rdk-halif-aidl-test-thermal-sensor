@@ -140,7 +140,6 @@ cd /tmp/thermalsensor
 
 Example: [host/configs/vts_rack_configuration.yaml](../../host/configs/vts_rack_configuration.yaml)
 
-Update the console sessions and `thermalSensorController` block for your test setup.
 
 | Console Session | Description |
 |----------------|-------------|
@@ -185,11 +184,6 @@ rackConfig:
               upload_url: "sftp://server-address/home/workspace/tftp/rack1/slot1/"
               workspaceDirectory: "./logs/workspace"
 ```
-
-> **thermalSensorController:**
-Configure this field according to your test platform. For virtual device testing, use `virtual-thermalsensor-client` as the type and provide the connection details of the device running the Thermal Sensor HAL service. For physical hardware testing, use the appropriate hardware controller type.
-- `control_port` — The port number where the Thermal Sensor HAL service accepts temperature injection command requests (default: `8080`).
-
 ---
 
 #### Device Configuration File
@@ -379,7 +373,6 @@ No physical thermal hardware or external heat source is required.
 
 For real hardware testing:
 
-- Replace the `thermalSensorController` block in the rack config with the appropriate physical hardware controller type.
 - Ensure the vendor thermal policy service is running on the DUT.
 - L3 temperature injection steps require a physical mechanism to drive the SoC or board temperature above the configured thresholds (e.g., CPU stress tools, environmental chamber, or controllable heater). The RAFT framework does not provide a built-in physical thermal controller; coordinate injection timing manually or via a custom controller plugin.
 
