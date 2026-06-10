@@ -27,7 +27,6 @@ deviceConfig:
         model:      "VTV"
         soc_vendor: "intel"
         target_directory: "/tmp/"
-        thermalsensor_process_name: "Vendor-ThermalSensor"
         prompt: "~#" # Prompt string on console
         wait_time: 240 # Configurable timeout value to limit the total duration of individual tests
         test:

@@ -75,14 +75,12 @@ Set the following environment variables before building:
 - `LINUX_BINDER_OUT_DIR`: Path to the Linux binder output directory.
 - `UT_CORE_VERSION`: UT-Core version (optional; defaults to latest tag).
 - `RDK_HALIF_AIDL_VERSION`: AIDL HAL spec version (optional; defaults to latest HEAD).
-- `VCOMPONENT_THERMALSENSOR_VERSION`: Thermal Sensor simulator version (if applicable).
 
 Example:
 
 ```bash
 export UT_CORE_VERSION=5.0.0
 export RDK_HALIF_AIDL_VERSION=0.15.0
-export VCOMPONENT_THERMALSENSOR_VERSION=0.1.0
 export AIDL_BIN=/path/to/linux_binder_idl/out/aidl
 export LINUX_BINDER_OUT_DIR=/path/to/linux_binder_idl/local/
 ```
@@ -182,14 +180,6 @@ rackConfig:
                   ip: ""
                   password: ""
                   prompt: "~#"
-            thermalSensorController:
-                type: virtual-thermalsensor-client
-                vendor: "vComponent"
-                address: "ip"
-                username: ""
-                password: ''
-                port: <port>
-                control_port: 8080
             outbound:
               download_url: "tftp://tftp-server.com/rack1/slot1/"
               upload_url: "sftp://server-address/home/workspace/tftp/rack1/slot1/"
@@ -213,7 +203,6 @@ deviceConfig:
     model: "VTV"
     soc_vendor: "intel"
     target_directory: "/tmp/"
-    thermalsensor_process_name: "Vendor-ThermalSensor"
     prompt: "~#"
     wait_time: 240
     test:
