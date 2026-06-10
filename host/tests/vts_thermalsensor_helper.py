@@ -37,7 +37,7 @@ THERMALSENSOR_L3_TEST_CONFIG_FILE = os.path.join(
     os.path.join(dir_path, "../../test_configuration"), "vts_l3_ThermalSensor.yaml")
 
 THERMALSENSOR_L3_TEST_SUITE_NAME = "VTS_L3_THERMALSENSOR"
-
+DEFAULT_CONTROLLER_PORT = 8081
 
 class thermalSensorHelperClass(utHelperClass):
     """
@@ -72,7 +72,6 @@ class thermalSensorHelperClass(utHelperClass):
 
         component_root = os.path.normpath(os.path.join(dir_path, "../.."))
         unified_root = os.path.normpath(os.path.join(dir_path, "../../../.."))
-        self.halServiceLogFile = "/tmp/thermalsensor_service.log"
         if not isUnifiedTest:
             self.paths = {
                 "testMenuConfigFile": THERMALSENSOR_TEST_MENU_CONFIGURATION_FILE,
@@ -106,7 +105,7 @@ class thermalSensorHelperClass(utHelperClass):
         ).replace("\\", "/")
 
         # Load test menu configuration
-        controllerPort = self.deviceTestSetup.get("thermalsensor_controller_port", 8081)
+        controllerPort = self.deviceTestSetup.get("thermalsensor_controller_port", DEFAULT_CONTROLLER_PORT)
         self.testMenuConfiguration = ConfigRead(
             self.paths["testMenuConfigFile"], self.moduleName)
         self.testMenuConfiguration.test.execute = (
