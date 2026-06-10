@@ -201,7 +201,7 @@ deviceConfig:
     wait_time: 240
     test:
       profile: "../../profiles/hfp-thermalsensor-vcomponent.yaml"
-      thermalsensor_controller_port: 8080
+      thermalsensor_controller_port: 8081
 ```
 
 ---
@@ -358,7 +358,7 @@ graph TD
 
 ### Simulator Mode
 
-When testing with the Thermal Sensor HAL simulator, temperature injections are performed synthetically via the control plane (HTTP port `8080` by default). The simulator emulates the vendor thermal policy engine including:
+When testing with the Thermal Sensor HAL simulator, temperature injections are performed synthetically via the control plane (HTTP port `8081` by default). The simulator emulates the vendor thermal policy engine including:
 
 - Per-sensor temperature updates driven by raw Celsius values from the control port
 - Policy evaluation: comparing injected temperature against HFP-defined thresholds (`critical_temperature_recovered_celsius`, `critical_temperature_exceeded_celsius`, `entering_critical_shutdown_celsius`)
