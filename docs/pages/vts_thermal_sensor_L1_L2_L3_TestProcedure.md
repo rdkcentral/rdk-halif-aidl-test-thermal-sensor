@@ -75,14 +75,12 @@ Set the following environment variables before building:
 - `LINUX_BINDER_OUT_DIR`: Path to the Linux binder output directory.
 - `UT_CORE_VERSION`: UT-Core version (optional; defaults to latest tag).
 - `RDK_HALIF_AIDL_VERSION`: AIDL HAL spec version (optional; defaults to latest HEAD).
-- `VCOMPONENT_THERMALSENSOR_VERSION`: Thermal Sensor simulator version (if applicable).
 
 Example:
 
 ```bash
 export UT_CORE_VERSION=5.0.0
 export RDK_HALIF_AIDL_VERSION=0.15.0
-export VCOMPONENT_THERMALSENSOR_VERSION=0.1.0
 export AIDL_BIN=/path/to/linux_binder_idl/out/aidl
 export LINUX_BINDER_OUT_DIR=/path/to/linux_binder_idl/local/
 ```
@@ -142,12 +140,11 @@ cd /tmp/thermalsensor
 
 Example: [host/configs/vts_rack_configuration.yaml](../../host/configs/vts_rack_configuration.yaml)
 
-Update the console sessions and `thermalSensorController` block for your test setup.
 
 | Console Session | Description |
 |----------------|-------------|
 | `default` | Device status and basic operations |
-| `ssh_hal_test` | Executes Thermal Sensor HAL VTS binary on DUT |
+| `ssh_hal_test_0` | Executes Thermal Sensor HAL VTS binary on DUT |
 | `ssh_hal_test_1` | Second SSH session for HAL service control |
 
 ```yaml
@@ -168,7 +165,7 @@ rackConfig:
                   ip: ""
                   password: ""
                   prompt: "~#"
-              - ssh_hal_test:
+              - ssh_hal_test_0:
                   type: "ssh"
                   port: <port>
                   username: "root"
@@ -182,24 +179,11 @@ rackConfig:
                   ip: ""
                   password: ""
                   prompt: "~#"
-            thermalSensorController:
-                type: virtual-thermalsensor-client
-                vendor: "vComponent"
-                address: "ip"
-                username: ""
-                password: ''
-                port: <port>
-                control_port: 8080
             outbound:
               download_url: "tftp://tftp-server.com/rack1/slot1/"
               upload_url: "sftp://server-address/home/workspace/tftp/rack1/slot1/"
               workspaceDirectory: "./logs/workspace"
 ```
-
-> **thermalSensorController:**
-Configure this field according to your test platform. For virtual device testing, use `virtual-thermalsensor-client` as the type and provide the connection details of the device running the Thermal Sensor HAL service. For physical hardware testing, use the appropriate hardware controller type.
-- `control_port` — The port number where the Thermal Sensor HAL service accepts temperature injection command requests (default: `8080`).
-
 ---
 
 #### Device Configuration File
@@ -213,12 +197,11 @@ deviceConfig:
     model: "VTV"
     soc_vendor: "intel"
     target_directory: "/tmp/"
-    thermalsensor_process_name: "Vendor-ThermalSensor"
     prompt: "~#"
     wait_time: 240
     test:
       profile: "../../profiles/hfp-thermalsensor-vcomponent.yaml"
-      controller_port: 8080
+      thermalsensor_controller_port: 8081
 ```
 
 ---
@@ -375,7 +358,7 @@ graph TD
 
 ### Simulator Mode
 
-When testing with the Thermal Sensor HAL simulator, temperature injections are performed synthetically via the control plane (HTTP port `8080` by default). The simulator emulates the vendor thermal policy engine including:
+When testing with the Thermal Sensor HAL simulator, temperature injections are performed synthetically via the control plane (HTTP port `8081` by default). The simulator emulates the vendor thermal policy engine including:
 
 - Per-sensor temperature updates driven by raw Celsius values from the control port
 - Policy evaluation: comparing injected temperature against HFP-defined thresholds (`critical_temperature_recovered_celsius`, `critical_temperature_exceeded_celsius`, `entering_critical_shutdown_celsius`)
@@ -390,7 +373,6 @@ No physical thermal hardware or external heat source is required.
 
 For real hardware testing:
 
-- Replace the `thermalSensorController` block in the rack config with the appropriate physical hardware controller type.
 - Ensure the vendor thermal policy service is running on the DUT.
 - L3 temperature injection steps require a physical mechanism to drive the SoC or board temperature above the configured thresholds (e.g., CPU stress tools, environmental chamber, or controllable heater). The RAFT framework does not provide a built-in physical thermal controller; coordinate injection timing manually or via a custom controller plugin.
 

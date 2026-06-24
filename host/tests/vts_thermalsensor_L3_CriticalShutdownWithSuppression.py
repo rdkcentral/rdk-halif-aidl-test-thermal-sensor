@@ -51,10 +51,10 @@ class VTS_THERMALSENSOR_L3_CriticalShutdownWithSuppression(thermalSensorHelperCl
     TC2: driven by transition_states from YAML; temps derived from HFP profile.
     """
 
-    def __init__(self, log: logModule = None):
+    def __init__(self, log: logModule = None, moduleName: str = None):
         self.testName = "ThermalSensor_L3_CriticalShutdownWithSuppression"
         qcId = "2"
-        super().__init__(self.testName, qcId, log)
+        super().__init__(self.testName, qcId, log, moduleName)
 
     def _verifyShutdownAndRecovery(self):
         """
@@ -130,7 +130,7 @@ class VTS_THERMALSENSOR_L3_CriticalShutdownWithSuppression(thermalSensorHelperCl
         Returns:
             bool: True if the test passed, False otherwise.
         """
-        with open(self.l3TestConfigFile, 'r') as fh:
+        with open(self.paths["l3TestConfigFile"], 'r') as fh:
             l3cfg = yaml.safe_load(fh)
 
         # TC2 drives NORMAL -> EXCEEDED -> CRITICAL_SHUTDOWN_IMMINENT (pre-shutdown
@@ -185,6 +185,8 @@ class VTS_THERMALSENSOR_L3_CriticalShutdownWithSuppression(thermalSensorHelperCl
             triggerDelay=triggerDelay)
 
         result = result and self._verifyShutdownAndRecovery()
+        # Reset all sensors to NORMAL so subsequent tests start from a clean state.
+        self.resetAllSensorsToNormal()
         return result
 
 if __name__ == "__main__":

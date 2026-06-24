@@ -24,12 +24,13 @@
 #ifndef __VTS_THERMALSENSOR_INIT_H__
 #define __VTS_THERMALSENSOR_INIT_H__
 
+#include <ut.h>
 /**
  * @brief Initialize the Thermal Sensor VTS test suite.
  *
  * Binds to the IThermalSensor binder service and parses the HFP profile.
  */
-void VTS_THERMALSENSOR_init(void);
+UT_status_t VTS_THERMALSENSOR_init(void);
 
 /**
  * @brief Destroy/cleanup the Thermal Sensor VTS test suite.

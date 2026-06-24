@@ -57,10 +57,10 @@ class VTS_THERMALSENSOR_L3_ThermalExceedRecoveryLifecycle(thermalSensorHelperCla
     dual-listener validation.
     """
 
-    def __init__(self, log: logModule = None):
+    def __init__(self, log: logModule = None, moduleName: str = None):
         self.testName = "ThermalSensor_L3_ThermalExceedRecoveryLifecycle"
         qcId = "1"
-        super().__init__(self.testName, qcId, log)
+        super().__init__(self.testName, qcId, log, moduleName)
 
     def _trigger(self, pri, sec, states, stateToTempKey):
 
@@ -145,7 +145,7 @@ class VTS_THERMALSENSOR_L3_ThermalExceedRecoveryLifecycle(thermalSensorHelperCla
         Returns:
             bool: True if ALL sensor pairs passed, False otherwise.
         """
-        with open(self.l3TestConfigFile, 'r') as fh:
+        with open(self.paths["l3TestConfigFile"], 'r') as fh:
             l3cfg = yaml.safe_load(fh)
 
         testNode  = l3cfg['thermalsensor']['L3']
