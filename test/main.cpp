@@ -54,7 +54,12 @@ int main(int argc, char **argv)
     UT_LOG_INFO("\t VTS THERMAL SENSOR HALIF Test Version: \033[0;32m%s\033[0m", THERMALSENSOR_VERSION);
     UT_LOG_INFO("==========================================================================");
 
-    VTS_THERMALSENSOR_init();
+    result = VTS_THERMALSENSOR_init();
+    if (result != UT_STATUS_OK)
+    {
+        UT_LOG_ERROR("VTS_THERMALSENSOR_init failed. Aborting test execution.");
+        return result;
+    }
 
     result = UT_run_tests();
 

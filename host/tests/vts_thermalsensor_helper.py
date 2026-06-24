@@ -32,12 +32,12 @@ from raft.framework.plugins.ut_raft.utBaseUtils import utBaseUtils
 from thermalController.ThermalSensorController import ThermalSensorController
 
 THERMALSENSOR_TEST_MENU_CONFIGURATION_FILE = os.path.join(
-    dir_path, "vts_thermalsensor_testMenuConfiguration.yaml")
+    dir_path, "vts_thermalsensor_testMenuConfiguration.yaml").replace("\\", "/")
 THERMALSENSOR_L3_TEST_CONFIG_FILE = os.path.join(
-    os.path.join(dir_path, "../../test_configuration"), "vts_l3_ThermalSensor.yaml")
+    os.path.join(dir_path, "../../test_configuration"), "vts_l3_ThermalSensor.yaml").replace("\\", "/")
 
 THERMALSENSOR_L3_TEST_SUITE_NAME = "VTS_L3_THERMALSENSOR"
-
+DEFAULT_CONTROLLER_PORT = 8081
 
 class thermalSensorHelperClass(utHelperClass):
     """
@@ -45,9 +45,17 @@ class thermalSensorHelperClass(utHelperClass):
     Handles artifact deployment, session setup, and control-plane trigger helpers.
     """
 
-    def __init__(self, testName: str, qcId: str, log: logModule = None):
-        self.moduleName = "thermalsensor"
+    def __init__(
+        self,
+        testName: str,
+        qcId: str,
+        log: logModule = None,
+        moduleName: str = None,
+    ):
+        self.moduleName = "thermalsensor" if moduleName is None else moduleName
+        isUnifiedTest = False if moduleName is None else True
         self.interfaceName = "thermalsensor"
+
         super().__init__(testName, qcId, log)
 
         self.log = log
@@ -55,30 +63,57 @@ class thermalSensorHelperClass(utHelperClass):
             self.log = logModule(self.__class__.__name__)
             self.log.setLevel(self.log.INFO)
 
-        # Parse device configuration
+        # Parse device configuration first (used by path selection below)
         self.deviceTestSetup = self.cpe.get("test")
-        self.targetWorkspace = os.path.join(
-            self.cpe.get("target_directory"), self.moduleName)
-        self.moduleHFPFile = os.path.join(
-            dir_path, self.deviceTestSetup.get("profile"))
-        profileOnTarget = os.path.join(
-            self.targetWorkspace, "profiles",
-            os.path.basename(self.moduleHFPFile)).replace("\\", "/")
         self.waitTime = self.cpe.get("wait_time")
         self.platform = self.cpe.get("platform")
+        self.targetWorkspace = os.path.join(
+            self.cpe.get("target_directory"), self.moduleName).replace("\\", "/")
+
+        component_root = os.path.normpath(os.path.join(dir_path, "../..")).replace("\\", "/")
+        unified_root = os.path.normpath(os.path.join(dir_path, "../../../..")).replace("\\", "/")
+        if not isUnifiedTest:
+            self.paths = {
+                "testMenuConfigFile": THERMALSENSOR_TEST_MENU_CONFIGURATION_FILE,
+                "l3TestConfigFile": THERMALSENSOR_L3_TEST_CONFIG_FILE,
+                "moduleHFPFile": os.path.join(dir_path, self.deviceTestSetup.get("profile")).replace("\\", "/"),
+            }
+            artifactBaseDir = dir_path
+            targetCfgBase = self.targetWorkspace
+        else:
+            self.paths = {
+                "testMenuConfigFile": os.path.join(
+                    unified_root, "host/tests/TestCases/vts_l3_test_setup.yaml"
+                ).replace("\\", "/"),
+                "l3TestConfigFile": os.path.join(
+                    component_root, "test_configuration/vts_l3_ThermalSensor.yaml"
+                ).replace("\\", "/"),
+                "moduleHFPFile": os.path.join(
+                    component_root, "profiles/hfp-thermalsensor-vcomponent.yaml"
+                ).replace("\\", "/"),
+            }
+            artifactBaseDir = os.path.join(component_root, "host").replace("\\", "/")
+            targetCfgBase = os.path.join(self.targetWorkspace, "bin").replace("\\", "/")
+
+        for attr, path in self.paths.items():
+            normalized_path = os.path.normpath(path).replace("\\", "/")
+            setattr(self, attr, normalized_path)
+            self.paths[attr] = normalized_path
+
+        profileOnTarget = os.path.join(
+            targetCfgBase, "profiles", os.path.basename(self.paths["moduleHFPFile"])
+        ).replace("\\", "/")
 
         # Load test menu configuration
-        controllerPort = self.deviceTestSetup.get("controller_port", 8080)
-        self.l3TestConfigFile = THERMALSENSOR_L3_TEST_CONFIG_FILE
+        controllerPort = self.deviceTestSetup.get("thermalsensor_controller_port", DEFAULT_CONTROLLER_PORT)
         self.testMenuConfiguration = ConfigRead(
-            THERMALSENSOR_TEST_MENU_CONFIGURATION_FILE, self.moduleName)
+            self.paths["testMenuConfigFile"], self.moduleName)
         self.testMenuConfiguration.test.execute = (
             self.testMenuConfiguration.test.execute + f" -p {profileOnTarget}")
         self.l3TestConfigFolder = os.path.join(
-            self.targetWorkspace, "test_configuration").replace("\\", "/")
+            targetCfgBase, "test_configuration").replace("\\", "/")
 
-        # Establish HAL session (test binary) and a second session for vcomponent
-        self.hal_session = self.dut.getConsoleSession("ssh_hal_test")
+        self.hal_session = self.dut.getConsoleSession("ssh_hal_test_0")
         self.hal_session_1 = self.dut.getConsoleSession("ssh_hal_test_1")
 
         # Initialize UT menu navigator and utilities
@@ -89,7 +124,7 @@ class thermalSensorHelperClass(utHelperClass):
         # Copy required artifacts to target device
         self.utilities.change_directory(self.hal_session, self.targetWorkspace)
         for artifact in self.testMenuConfiguration.test.artifacts:
-            filesPath = os.path.join(dir_path, artifact)
+            filesPath = os.path.normpath(os.path.join(artifactBaseDir, artifact)).replace("\\", "/")
             self.utilities.sftpCopy(
                 self.hal_session, filesPath, self.targetWorkspace)
             if tarfile.is_tarfile(filesPath):
@@ -99,15 +134,9 @@ class thermalSensorHelperClass(utHelperClass):
                 self.utilities.untar(
                     self.hal_session, targetTarfile, self.targetWorkspace)
 
-        self.vcomponentLogFile = "/tmp/vcomponent_thermalsensor.log"
-        self.utilities.change_directory(
-            self.hal_session_1, self.targetWorkspace)
-        self.hal_session_1.write(
-            f"pkill -f {self.cpe.get('thermalsensor_process_name')} 2>/dev/null; sleep 1")
-        time.sleep(1)
-        self.hal_session_1.write(
-            f"./{self.cpe.get('thermalsensor_process_name')} --port {controllerPort} "
-            f"> {self.vcomponentLogFile} 2>&1 &")
+        self.targetWorkspace = targetCfgBase
+        self.utilities.change_directory(self.hal_session, self.targetWorkspace)
+        self.utilities.change_directory(self.hal_session_1, self.targetWorkspace)
         time.sleep(2)
 
         self.thermalSensorDevice = ThermalSensorController(
@@ -149,7 +178,7 @@ class thermalSensorHelperClass(utHelperClass):
         Returns:
             list: One dict per sensor in HFP profile order.
         """
-        with open(self.moduleHFPFile, 'r') as fh:
+        with open(self.paths["moduleHFPFile"], 'r') as fh:
             hfp = yaml.safe_load(fh)
 
         sensors = []
@@ -188,13 +217,29 @@ class thermalSensorHelperClass(utHelperClass):
                 post-shutdown suppression (TC1 path); > 0 enables it (TC2 path).
                 Defaults to 0.
         """
-        data = self.readYaml(self.l3TestConfigFile)
+        data = self.readYaml(self.paths["l3TestConfigFile"])
         data['thermalsensor']['L3']['transition_states']     = list(states)
         data['thermalsensor']['L3']['suppression_timeout_ms'] = int(suppressionTimeoutMs)
-        self.writeYaml(self.l3TestConfigFile, data)
+        self.writeYaml(self.paths["l3TestConfigFile"], data)
         self.log.info(
             f"[updateTransitionStates] transition_states={states} "
             f"suppression_timeout_ms={suppressionTimeoutMs}")
+
+    def resetAllSensorsToNormal(self):
+        """
+        Directly forces the vcomponent state to NORMAL for every sensor in the
+        HFP profile.  Call this after a test that ends in a non-NORMAL state
+        (e.g. CRITICAL_SHUTDOWN_IMMINENT) so the next test starts cleanly.
+        """
+        sensors = self.getSensorListFromHFP()
+        for s in sensors:
+            self.log.info(
+                f"[resetAllSensorsToNormal] Resetting '{s['name']}' to NORMAL")
+            self.thermalSensorDevice.triggerThermalStateChange(
+                state="NORMAL",
+                sensorName=s['name'],
+                temperatureCelsius=s['normal_temp'])
+            time.sleep(0.5)
 
     def runL3Test(self, testcase: str, triggerCallable=None, triggerDelay: float = 25.0) -> bool:
         """
@@ -217,7 +262,7 @@ class thermalSensorHelperClass(utHelperClass):
             bool: True if the test passed, False otherwise.
         """
         self.utilities.sftpCopy(
-            self.hal_session, self.l3TestConfigFile, self.l3TestConfigFolder)
+            self.hal_session, self.paths["l3TestConfigFile"], self.l3TestConfigFolder)
         self.utMenu.start()
 
         triggerThread = None
@@ -238,38 +283,7 @@ class thermalSensorHelperClass(utHelperClass):
         if results is None:
             results = False
 
-        self._emitVcomponentLogs(testcase)
-
         self.log.stepResult(
             results,
             f"Test Suite: {THERMALSENSOR_L3_TEST_SUITE_NAME}  Test Case: {testcase}")
         return results
-
-    def _emitVcomponentLogs(self, testcase: str):
-        """
-        Reads the vcomponent log file from the target via hal_session_1 and emits
-        each line into the VTS log, then truncates the file so the next test case
-        sees only its own output.
-
-        Args:
-            testcase (str): Test case name, used only for the log header.
-        """
-        try:
-            prompt = self.cpe.get("prompt", "~#")
-            self.hal_session_1.write(f"cat {self.vcomponentLogFile}")
-            logContent = self.hal_session_1.read_until(prompt, timeout=5)
-            self.log.info(f"--- vcomponent logs for {testcase} ---")
-            import re
-            _ansiRe = re.compile(r'\x1b\[[0-9;]*[mK]')
-            for line in logContent.splitlines():
-                stripped = _ansiRe.sub('', line).strip()
-                if stripped:
-                    # Replace non-ASCII characters (e.g. → arrows) so the
-                    # message can be encoded on any platform (including
-                    # Windows cp1252 terminals).
-                    safe = stripped.encode('ascii', errors='replace').decode('ascii')
-                    self.log.info(f"[vcomponent] {safe}")
-            self.log.info(f"--- end vcomponent logs for {testcase} ---")
-            self.hal_session_1.write(f"> {self.vcomponentLogFile}")
-        except Exception as exc:
-            self.log.warn(f"[vcomponent log capture] Could not read log file: {exc}")
