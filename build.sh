@@ -50,9 +50,8 @@ declare -r PROFILES_DIR=${TOP}/profiles
 
 OUT_TAR_FILE=vts-thermalsensor.tar.gz
 
-LOCAL_BINDER_TOOLCHAIN_DIR=${BINDER_SOURCE_DIR:-${TOP}/build-tools/linux_binder_idl}
-LOCAL_BINDER_SDK_DIR=${BINDER_SDK_DIR:-${TOP}/out/target}
-LOCAL_BINDER_INCLUDE_DIR=${BINDER_SDK_INCLUDE_DIR:-${TOP}/out/build/include/binder_sdk}
+LOCAL_BINDER_SDK_DIR=${BINDER_SDK_DIR:-${RDK_HAL_DIR}/out/target}
+LOCAL_BINDER_INCLUDE_DIR=${BINDER_SDK_INCLUDE_DIR:-${RDK_HAL_DIR}/out/build/include/binder_sdk}
 LOCAL_BINDER_LIB_DIR=${BINDER_SDK_LIB_DIR:-${LOCAL_BINDER_SDK_DIR}/lib/binder}
 
 mkdir -p $TOP_BUILD_DIR
@@ -83,12 +82,21 @@ fi
 ###############################################################################
 verify_local_binder_sdk()
 {
+    # rdk-halif-aidl must be cloned first — build_binder.sh lives inside it
+    if [ ! -d "${RDK_HAL_DIR}" ]; then
+        echo "Cloning rdk-halif-aidl (${RDK_HALIF_AIDL_VERSION}) to obtain build_binder.sh..."
+        git clone -b "${RDK_HALIF_AIDL_VERSION}" 'https://github.com/rdkcentral/rdk-halif-aidl.git' "${RDK_HAL_DIR}" || {
+            echo -e "${BOLD}${RED}ERROR: Failed to clone rdk-halif-aidl.${RESET}"
+            exit 1
+        }
+    fi
+
     local sdk_ready="${LOCAL_BINDER_SDK_DIR}/.sdk_ready"
-    local binder_builder="${TOP}/build_binder.sh"
+    local binder_builder="${RDK_HAL_DIR}/build_binder.sh"
 
     if [ ! -f "${sdk_ready}" ]; then
         echo -e "${BOLD}${YELLOW}Local Binder SDK not staged. Bootstrapping via ${binder_builder}${RESET}"
-        BINDER_SOURCE_DIR="${LOCAL_BINDER_TOOLCHAIN_DIR}" "${binder_builder}"
+        ( cd "${RDK_HAL_DIR}" && bash build_binder.sh )
         if [ $? -ne 0 ] || [ ! -f "${sdk_ready}" ]; then
             echo -e "${BOLD}${RED}ERROR: Local Binder SDK is not staged at ${LOCAL_BINDER_SDK_DIR}${RESET}"
             exit 1
@@ -330,6 +338,10 @@ dist_clean_test()
     rm -rf $TOP_BUILD_DIR
     rm -rf $RDK_HAL_DIR
     rm -rf ${UT_CORE_DIR}
+    rm -f  "${TOP}/build_binder.sh"
+    rm -f  "${TOP}/binder_sdk.version"
+    rm -rf "${TOP}/build-tools"
+    rm -rf "${TOP}/out"
 }
 
 ###############################################################################
