@@ -29,13 +29,16 @@ AIDL_LIB := lib$(AIDL_LIB_NAME).so
 BUILD_DIR ?= $(CURDIR)/../build
 
 # Versioned src/include dirs resolved from rdk-halif-aidl by build.sh
+# Guard errors so 'make clean' works without these being set
+ifneq ($(MAKECMDGOALS),clean)
 HALIF_AIDL_SRC_DIR ?= $(error HALIF_AIDL_SRC_DIR is not set - run via build.sh)
 HALIF_AIDL_INC_DIR ?= $(error HALIF_AIDL_INC_DIR is not set - run via build.sh)
 BINDER_SDK_INCLUDE_DIR ?= $(error BINDER_SDK_INCLUDE_DIR is not set - run via build.sh)
 BINDER_SDK_LIB_DIR ?= $(error BINDER_SDK_LIB_DIR is not set - run via build.sh)
 
 # Source files from the versioned AIDL src directory
-AIDL_SRC := $(shell find $(HALIF_AIDL_SRC_DIR) -type f \( -name '*.cpp' -o -name '*.c' \))
+AIDL_SRC := $(shell find $(HALIF_AIDL_SRC_DIR) -type f -name '*.cpp')
+endif
 
 AIDL_LIB_INC_FLAGS := -I$(HALIF_AIDL_INC_DIR)
 AIDL_LIB_INC_FLAGS += -I$(BINDER_SDK_INCLUDE_DIR)
@@ -60,4 +63,5 @@ $(AIDL_LIB): $(AIDL_SRC:%.cpp=%.o)
 	$(CXX) $(AIDL_LIB_CFLAGS) $(AIDL_LIB_INC_FLAGS) -c $< -o $@
 
 clean:
-	rm -f $(AIDL_LIB) $(AIDL_SRC:%.cpp=%.o)
+	rm -f $(BUILD_DIR)/usr/lib/libaidl_client.so
+	find $(CURDIR) -name '*.o' -delete

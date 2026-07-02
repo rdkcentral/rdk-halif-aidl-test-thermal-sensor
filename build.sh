@@ -331,55 +331,18 @@ install_linux_binder()
         cp -apr "${LOCAL_BINDER_INCLUDE_DIR}/." ${BUILD_INSTALL_PREFIX}/include/
     fi
 
-    # Bundle host libstdc++ so the binary runs on targets with older system libs
-    # (avoids GLIBCXX_x.x.xx not found errors at runtime)
-    local libstdcpp
-    libstdcpp=$(realpath "$(g++ -print-file-name=libstdc++.so.6)" 2>/dev/null)
-    if [ -f "${libstdcpp}" ]; then
-        install -t ${BUILD_INSTALL_PREFIX}/lib "${libstdcpp}"
-        # Create the soname symlink (libstdc++.so.6) that the dynamic linker looks for
-        local libstdcpp_basename
-        libstdcpp_basename=$(basename "${libstdcpp}")
-        ln -sf "${libstdcpp_basename}" "${BUILD_INSTALL_PREFIX}/lib/libstdc++.so.6"
-        echo "Bundled host libstdc++: ${libstdcpp}"
+    # Bundle libstdc++ for linux builds so the binary runs on targets with older system libs
+    # (avoids GLIBCXX_x.x.xx not found errors at runtime). Do not bundle for cross builds.
+    if [ "${TARGET}" = "linux" ]; then
+        local cxx_bin=${CXX:-g++}
+        local libstdcpp
+        libstdcpp=$(realpath "$(${cxx_bin} -print-file-name=libstdc++.so.6)" 2>/dev/null)
+        if [ -f "${libstdcpp}" ]; then
+            install -t ${BUILD_INSTALL_PREFIX}/lib "${libstdcpp}"
+            ln -sf "$(basename "${libstdcpp}")" "${BUILD_INSTALL_PREFIX}/lib/libstdc++.so.6"
+            echo "Bundled libstdc++: ${libstdcpp}"
+        fi
     fi
-}
-
-###############################################################################
-# Function to clone rdk-halif-aidl and resolve versioned src/include dirs
-###############################################################################
-resolve_hal_interfaces()
-{
-    for component in "${!HALIF_COMPONENTS[@]}"; do
-        local metadata="${RDK_HAL_DIR}/${component}/metadata.yaml"
-        if [ ! -f "$metadata" ]; then
-            echo -e "${BOLD}${RED}ERROR: metadata.yaml not found: ${metadata}${RESET}"
-            exit 1
-        fi
-
-        local version
-        version=$(grep -m1 '^version:' "$metadata" | awk '{print $2}')
-        if [ -z "$version" ]; then
-            echo -e "${BOLD}${RED}ERROR: Could not parse version from ${metadata}${RESET}"
-            exit 1
-        fi
-
-        local inc_dir="${RDK_HAL_DIR}/${component}/${version}/include"
-        local src_dir="${RDK_HAL_DIR}/${component}/${version}/src"
-
-        if [ ! -d "$inc_dir" ]; then
-            echo -e "${BOLD}${RED}ERROR: versioned include dir not found: ${inc_dir}${RESET}"
-            exit 1
-        fi
-        if [ ! -d "$src_dir" ]; then
-            echo -e "${BOLD}${RED}ERROR: versioned src dir not found: ${src_dir}${RESET}"
-            exit 1
-        fi
-
-        echo -e "${BOLD}${GREEN}${component}${RESET}: version=${YELLOW}${version}${RESET}"
-        HALIF_AIDL_SRC_DIR=$(realpath "$src_dir")
-        HALIF_AIDL_INC_DIR=$(realpath "$inc_dir")
-    done
 }
 
 ###############################################################################
@@ -387,21 +350,47 @@ resolve_hal_interfaces()
 ###############################################################################
 generate_hal_interfaces()
 {
-    checkout_halif_repo
-    resolve_hal_interfaces
-    install_halif_headers
-}
+    # Iterate through the HALIF components
+    for component in "${!HALIF_COMPONENTS[@]}"; do
+        version=${HALIF_COMPONENTS[$component]}
+        echo "Component: $component, Version: $version"
 
-###############################################################################
-# Install HALIF pre-generated headers into build/usr/include/
-###############################################################################
-install_halif_headers()
-{
-    echo "Installing HALIF headers..."
-    install -d ${BUILD_INSTALL_PREFIX}/include
-    if [ -d "${HALIF_AIDL_INC_DIR}" ]; then
-        cp -apr "${HALIF_AIDL_INC_DIR}/." "${BUILD_INSTALL_PREFIX}/include/"
-    fi
+        HAL_TOP_BUILD_DIR=${TOP_BUILD_DIR}/${component}_aidl
+
+        cmake \
+        -DINTERFACE_TARGET=$component \
+        -DAIDL_SRC_VERSION=$version \
+        -B ${HAL_TOP_BUILD_DIR} \
+        $RDK_HAL_DIR
+        if [ $? -ne 0 ]; then
+            echo -e "${BOLD}╔══════════════════════════════════════════════╗${RESET}"
+            echo -e "${BOLD}* ${RED}Failed to Configure AIDL files. Exiting.${RESET}"
+            echo -e "${BOLD}╚══════════════════════════════════════════════╝${RESET}"
+            exit 1
+        fi
+
+        cmake --build ${HAL_TOP_BUILD_DIR} -j$(nproc)
+        if [ $? -ne 0 ]; then
+            echo -e "${BOLD}╔══════════════════════════════════════════════╗${RESET}"
+            echo -e "${BOLD}* ${RED}Failed to Generate AIDL headers. Exiting.${RESET}"
+            echo -e "${BOLD}╚══════════════════════════════════════════════╝${RESET}"
+            exit 1
+        fi
+
+        # Set src/include paths for build_aidl_libs
+        HALIF_AIDL_SRC_DIR=$(realpath "${RDK_HAL_DIR}/${component}/${version}/src")
+        HALIF_AIDL_INC_DIR=$(realpath "${RDK_HAL_DIR}/${component}/${version}/include")
+
+        # Copy generated headers to build/usr/include so the test build can find them
+        local gen_inc_dir="${RDK_HAL_DIR}/out/build/include/${component}/${version}/include"
+        if [ -d "${gen_inc_dir}" ]; then
+            install -d "${BUILD_INSTALL_PREFIX}/include"
+            cp -apr "${gen_inc_dir}/." "${BUILD_INSTALL_PREFIX}/include/"
+        else
+            echo -e "${BOLD}${RED}ERROR: Generated include dir not found: ${gen_inc_dir}${RESET}"
+            exit 1
+        fi
+    done
 }
 
 ###############################################################################
