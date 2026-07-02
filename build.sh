@@ -28,16 +28,10 @@ BOLD='\033[1m'
 RESET='\033[0m'
 
 declare -r TOP=`dirname $(realpath $0)`
-declare -r HALIF_VERSION=current
 RDK_HALIF_AIDL_VERSION="${RDK_HALIF_AIDL_VERSION="main"}"
-RDK_HALIF_TEST_BASE_URL="https://github.com/rdkcentral/rdk-halif-binder-test-"
 
 declare -A HALIF_COMPONENTS=(
   [sensor]="current"
-)
-
-declare -A HALIF_TEST_COMPONENTS=(
-  [sensor]="RDK_HALIF_THERMALSENSOR_TEST_VERSION"
 )
 
 # Define the directory where the repository will be cloned
@@ -50,14 +44,10 @@ declare -r PROFILES_DIR=${TOP}/profiles
 
 OUT_TAR_FILE=vts-thermalsensor.tar.gz
 
-refresh_local_binder_paths()
-{
-    LOCAL_BINDER_SDK_DIR=${BINDER_SDK_DIR:-${RDK_HAL_DIR}/out/target}
-    LOCAL_BINDER_INCLUDE_DIR=${BINDER_SDK_INCLUDE_DIR:-${RDK_HAL_DIR}/out/build/include/binder_sdk}
-    LOCAL_BINDER_LIB_DIR=${BINDER_SDK_LIB_DIR:-${LOCAL_BINDER_SDK_DIR}/lib/binder}
-}
-
-refresh_local_binder_paths
+LOCAL_BINDER_TOOLCHAIN_DIR=${BINDER_SOURCE_DIR:-${RDK_HAL_DIR}/build-tools/linux_binder_idl}
+LOCAL_BINDER_SDK_DIR=${BINDER_SDK_DIR:-${RDK_HAL_DIR}/out/target}
+LOCAL_BINDER_INCLUDE_DIR=${BINDER_SDK_INCLUDE_DIR:-${RDK_HAL_DIR}/out/build/include/binder_sdk}
+LOCAL_BINDER_LIB_DIR=${BINDER_SDK_LIB_DIR:-${LOCAL_BINDER_SDK_DIR}/lib/binder}
 
 mkdir -p $TOP_BUILD_DIR
 
@@ -81,37 +71,6 @@ if [[ ! " ${valid_targets[@]} " =~ " ${TARGET} " ]]; then
     help
     exit 1
 fi
-
-###############################################################################
-# Clone rdk-halif-aidl if not present, or switch to the required branch.
-###############################################################################
-checkout_halif_repo()
-{
-    if [ ! -d "$RDK_HAL_DIR" ]; then
-        echo "Cloning rdk-halif-aidl (branch: $RDK_HALIF_AIDL_VERSION)..."
-        git clone -b "$RDK_HALIF_AIDL_VERSION" https://github.com/rdkcentral/rdk-halif-aidl.git "$RDK_HAL_DIR" || {
-            echo "ERROR: Failed to clone rdk-halif-aidl."
-            exit 1
-        }
-        return
-    fi
-
-    local current_branch
-    current_branch=$(git -C "$RDK_HAL_DIR" rev-parse --abbrev-ref HEAD 2>/dev/null)
-    if [ "${current_branch}" = "${RDK_HALIF_AIDL_VERSION}" ]; then
-        return
-    fi
-
-    echo "rdk-halif-aidl is on '${current_branch}', switching to '${RDK_HALIF_AIDL_VERSION}'..."
-    git -C "$RDK_HAL_DIR" fetch origin "$RDK_HALIF_AIDL_VERSION" || {
-        echo "ERROR: Failed to fetch branch ${RDK_HALIF_AIDL_VERSION}."
-        exit 1
-    }
-    git -C "$RDK_HAL_DIR" checkout "$RDK_HALIF_AIDL_VERSION" || {
-        echo "ERROR: Failed to checkout branch ${RDK_HALIF_AIDL_VERSION}."
-        exit 1
-    }
-}
 
 ###############################################################################
 # Cross-compile ARM binder runtime (libbinder.so, libutils.so, etc.) from
@@ -194,15 +153,15 @@ TOOLCHAIN_EOF
     [ -n "${_OECORE_TARGET}" ] && export OECORE_TARGET_SYSROOT="${_OECORE_TARGET}"
 
     if [ $cmake_cfg_rc -ne 0 ]; then
-        echo "ERROR: ARM binder cmake configuration failed."
+        echo -e "${BOLD}${RED}ERROR: ARM binder cmake configuration failed.${RESET}"
         exit 1
     fi
     cmake --build "${ARM_BINDER_BUILD}" -j"$(nproc)" || {
-        echo "ERROR: ARM binder build failed."
+        echo -e "${BOLD}${RED}ERROR: ARM binder build failed.${RESET}"
         exit 1
     }
     cmake --install "${ARM_BINDER_BUILD}" || {
-        echo "ERROR: ARM binder install failed."
+        echo -e "${BOLD}${RED}ERROR: ARM binder install failed.${RESET}"
         exit 1
     }
 
@@ -220,34 +179,46 @@ TOOLCHAIN_EOF
             -exec mv {} "${ARM_BINDER_INCLUDE}/include/binder_sdk/" \; 2>/dev/null || true
         rmdir "${ARM_BINDER_SDK}/include" 2>/dev/null || true
     fi
-    mkdir -p "${ARM_BINDER_SDK}/lib/halif"
     touch "${ARM_BINDER_SDK}/.sdk_ready"
-    touch "${ARM_BINDER_INCLUDE}/.sdk_ready"
     echo "ARM Binder SDK built and installed to ${ARM_BINDER_SDK}"
 }
 
 ###############################################################################
-# Set up binder SDK from rdk-halif-aidl for linux/arm builds.
+# Set up the Binder SDK required for compilation.
+#
+# Linux: runs rdk-halif-aidl/build_binder.sh (no-op if .sdk_ready exists).
+# ARM:   checks in order —
+#   1. BINDER_SDK_DIR env var (user-supplied pre-built ARM binder SDK).
+#   2. OE sysroot binder at ${OECORE_TARGET_SYSROOT}/usr/lib/binder.
+#   3. Two-step cross-compile:
+#        Step 1 — build host AIDL tools with the x86 compiler (unsets OE env
+#                 so linux_binder_idl does not skip its install() rules).
+#        Step 2 — cross-compile the ARM binder runtime via build_arm_binder().
 ###############################################################################
 setup_binder_sdk()
 {
-    local binder_toolchain_dir="${RDK_HAL_DIR}/build-tools/linux_binder_idl"
-
-    checkout_halif_repo
-
+    local binder_toolchain_dir="${LOCAL_BINDER_TOOLCHAIN_DIR}"
+    local sdk_ready="${LOCAL_BINDER_SDK_DIR}/.sdk_ready"
     if [ "${TARGET}" = "arm" ]; then
+        # Option 1: user supplied a pre-built ARM binder SDK
         if [ -n "${BINDER_SDK_DIR:-}" ]; then
-            refresh_local_binder_paths
+            echo "ARM build: using pre-built Binder SDK at ${BINDER_SDK_DIR}"
+            LOCAL_BINDER_SDK_DIR="${BINDER_SDK_DIR}"
+            LOCAL_BINDER_LIB_DIR="${BINDER_SDK_DIR}/lib/binder"
             return
         fi
 
+        # Option 2: OE sysroot already contains the binder runtime
         if [ -n "${OECORE_TARGET_SYSROOT:-}" ] && [ -d "${OECORE_TARGET_SYSROOT}/usr/lib/binder" ]; then
             export BINDER_SDK_DIR="${OECORE_TARGET_SYSROOT}/usr"
+            LOCAL_BINDER_SDK_DIR="${BINDER_SDK_DIR}"
+            LOCAL_BINDER_LIB_DIR="${BINDER_SDK_DIR}/lib/binder"
             echo "ARM build: using OE sysroot binder SDK at ${BINDER_SDK_DIR}"
-            refresh_local_binder_paths
             return
         fi
 
+        # Option 3: cross-compile from source.
+        # Step 1 - build AIDL host tools using the x86 compiler.
         echo "ARM build: building AIDL host tools with x86 compiler..."
         local _CC="${CC:-}" _CXX="${CXX:-}" _CFLAGS="${CFLAGS:-}"
         local _CXXFLAGS="${CXXFLAGS:-}" _LDFLAGS="${LDFLAGS:-}"
@@ -261,9 +232,11 @@ setup_binder_sdk()
             cd "${RDK_HAL_DIR}"
             ./build_binder.sh
         ) || {
-            echo "ERROR: build_binder.sh (host tools) failed."
+            echo -e "${BOLD}${RED}ERROR: build_binder.sh (host tools) failed.${RESET}"
             exit 1
         }
+
+        # Restore ARM cross-compile environment.
         [ -n "${_CC}" ]                   && export CC="${_CC}"
         [ -n "${_CXX}" ]                  && export CXX="${_CXX}"
         [ -n "${_CFLAGS}" ]               && export CFLAGS="${_CFLAGS}"
@@ -274,34 +247,32 @@ setup_binder_sdk()
         [ -n "${_OECORE_NATIVE}" ]        && export OECORE_NATIVE_SYSROOT="${_OECORE_NATIVE}"
         [ -n "${_OECORE_TARGET}" ]        && export OECORE_TARGET_SYSROOT="${_OECORE_TARGET}"
 
-        rm -f "${RDK_HAL_DIR}/out/target/.sdk_ready"
+        # Step 2: cross-compile ARM binder runtime.
+        rm -f "${LOCAL_BINDER_SDK_DIR}/.sdk_ready"
         echo "ARM build: cross-compiling ARM binder runtime..."
         build_arm_binder
-        export BINDER_SDK_DIR="${RDK_HAL_DIR}/out/target"
+        LOCAL_BINDER_LIB_DIR="${LOCAL_BINDER_SDK_DIR}/lib/binder"
     else
+        # Linux native build.
         if [ -d "${binder_toolchain_dir}" ] && [ ! -d "${binder_toolchain_dir}/.git" ]; then
             echo "Removing incomplete toolchain stub before fresh clone..."
             rm -rf "${binder_toolchain_dir}"
         fi
-        (
-            cd "${RDK_HAL_DIR}"
-            ./build_binder.sh
-        ) || {
-            echo "ERROR: build_binder.sh failed. Cannot continue."
+        if [ ! -f "${sdk_ready}" ]; then
+            echo -e "${BOLD}${YELLOW}Local Binder SDK not staged. Bootstrapping via rdk-halif-aidl/build_binder.sh${RESET}"
+            BINDER_SOURCE_DIR="${binder_toolchain_dir}" "${RDK_HAL_DIR}/build_binder.sh" || {
+                echo -e "${BOLD}${RED}ERROR: build_binder.sh failed. Cannot continue.${RESET}"
+                exit 1
+            }
+        fi
+        if [ ! -d "${LOCAL_BINDER_INCLUDE_DIR}" ]; then
+            echo -e "${BOLD}${RED}ERROR: Local Binder headers not found: ${LOCAL_BINDER_INCLUDE_DIR}${RESET}"
             exit 1
-        }
-    fi
-
-    refresh_local_binder_paths
-
-    if [ ! -d "${LOCAL_BINDER_INCLUDE_DIR}" ]; then
-        echo -e "${BOLD}${RED}ERROR: Local Binder headers not found: ${LOCAL_BINDER_INCLUDE_DIR}${RESET}"
-        exit 1
-    fi
-
-    if [ ! -d "${LOCAL_BINDER_LIB_DIR}" ]; then
-        echo -e "${BOLD}${RED}ERROR: Local Binder libraries not found: ${LOCAL_BINDER_LIB_DIR}${RESET}"
-        exit 1
+        fi
+        if [ ! -d "${LOCAL_BINDER_LIB_DIR}" ]; then
+            echo -e "${BOLD}${RED}ERROR: Local Binder libraries not found: ${LOCAL_BINDER_LIB_DIR}${RESET}"
+            exit 1
+        fi
     fi
 }
 
@@ -313,7 +284,7 @@ setup_binder_sdk()
 install_linux_binder()
 {
     local BINDER_SDK="${LOCAL_BINDER_SDK_DIR}"
-
+    local BINDER_INC="${RDK_HAL_DIR}/out/build"
     echo "Installing binder service manager, headers and libraries..."
     install -d ${BUILD_INSTALL_PREFIX}/bin ${BUILD_INSTALL_PREFIX}/lib ${BUILD_INSTALL_PREFIX}/include
 
@@ -327,69 +298,93 @@ install_linux_binder()
             -exec install -t ${BUILD_INSTALL_PREFIX}/lib {} \; 2>/dev/null || true
     fi
 
-    if [ -d "${LOCAL_BINDER_INCLUDE_DIR}" ]; then
-        cp -apr "${LOCAL_BINDER_INCLUDE_DIR}/." ${BUILD_INSTALL_PREFIX}/include/
+    if [ -d "${BINDER_INC}/include/binder_sdk" ]; then
+        cp -apr ${BINDER_INC}/include/binder_sdk/. ${BUILD_INSTALL_PREFIX}/include/
     fi
-
-    # Bundle libstdc++ for linux builds so the binary runs on targets with older system libs
-    # (avoids GLIBCXX_x.x.xx not found errors at runtime). Do not bundle for cross builds.
+    # Bundle host libstdc++ for linux builds only — for ARM the target system
+    # provides the correct ABI-matched libstdc++ already.
     if [ "${TARGET}" = "linux" ]; then
-        local cxx_bin=${CXX:-g++}
         local libstdcpp
-        libstdcpp=$(realpath "$(${cxx_bin} -print-file-name=libstdc++.so.6)" 2>/dev/null)
+        libstdcpp=$(realpath "$(g++ -print-file-name=libstdc++.so.6)" 2>/dev/null)
         if [ -f "${libstdcpp}" ]; then
             install -t ${BUILD_INSTALL_PREFIX}/lib "${libstdcpp}"
-            ln -sf "$(basename "${libstdcpp}")" "${BUILD_INSTALL_PREFIX}/lib/libstdc++.so.6"
-            echo "Bundled libstdc++: ${libstdcpp}"
+            # Create the soname symlink (libstdc++.so.6) that the dynamic linker looks for
+            local libstdcpp_basename
+            libstdcpp_basename=$(basename "${libstdcpp}")
+            ln -sf "${libstdcpp_basename}" "${BUILD_INSTALL_PREFIX}/lib/libstdc++.so.6"
+            echo "Bundled host libstdc++: ${libstdcpp}"
         fi
     fi
 }
 
 ###############################################################################
-# Resolve and install HALIF interfaces for non-manifest single-component builds
+# Install versioned HALIF headers into build/usr/include/ so the Makefile can
+# reference them via the staged build/usr/include path.
+# Must be called after resolve_halif_versions().
 ###############################################################################
-generate_hal_interfaces()
+install_halif_headers()
 {
-    # Iterate through the HALIF components
+    echo "Installing HALIF headers..."
+    install -d ${BUILD_INSTALL_PREFIX}/include
+    if [ -d "${HALIF_AIDL_INC_DIR}" ]; then
+        cp -apr "${HALIF_AIDL_INC_DIR}/." "${BUILD_INSTALL_PREFIX}/include/"
+    fi
+}
+
+###############################################################################
+# Resolve versioned src/include dirs from rdk-halif-aidl/versions_released.yaml
+# with a per-component override and default fallback.
+###############################################################################
+resolve_halif_versions()
+{
+    # Clone the repository if not already present
+    if [ ! -d "$RDK_HAL_DIR" ]; then
+        echo "Checking out version: $RDK_HALIF_AIDL_VERSION"
+        git clone -b $RDK_HALIF_AIDL_VERSION 'https://github.com/rdkcentral/rdk-halif-aidl.git' $RDK_HAL_DIR
+        if [ $? -ne 0 ]; then
+            echo -e "${BOLD}╔══════════════════════════════════════════════╗${RESET}"
+            echo -e "${BOLD}* ${RED}Failed to clone rdk-halif-aidl. Exiting.${RESET}"
+            echo -e "${BOLD}╚══════════════════════════════════════════════╝${RESET}"
+            exit 1
+        fi
+    fi
+
+    local versions_file="${RDK_HAL_DIR}/versions_released.yaml"
+
+    if [ ! -f "$versions_file" ]; then
+        echo -e "${BOLD}${RED}ERROR: versions_released.yaml not found: ${versions_file}${RESET}"
+        exit 1
+    fi
+
+    local default_version
+    default_version=$(grep -m1 '^default:' "$versions_file" | awk '{print $2}')
+    if [ -z "$default_version" ]; then
+        default_version="current"
+    fi
+
     for component in "${!HALIF_COMPONENTS[@]}"; do
-        version=${HALIF_COMPONENTS[$component]}
-        echo "Component: $component, Version: $version"
+        local version
+        version=$(grep -m1 "^[[:space:]]*${component}:" "$versions_file" | awk '{print $2}')
+        if [ -z "$version" ]; then
+            echo -e "${BOLD}${YELLOW}WARNING: ${component} not listed in versions_released.yaml, using default: ${default_version}${RESET}"
+            version="$default_version"
+        fi
 
-        HAL_TOP_BUILD_DIR=${TOP_BUILD_DIR}/${component}_aidl
+        local inc_dir="${RDK_HAL_DIR}/${component}/${version}/include"
+        local src_dir="${RDK_HAL_DIR}/${component}/${version}/src"
 
-        cmake \
-        -DINTERFACE_TARGET=$component \
-        -DAIDL_SRC_VERSION=$version \
-        -B ${HAL_TOP_BUILD_DIR} \
-        $RDK_HAL_DIR
-        if [ $? -ne 0 ]; then
-            echo -e "${BOLD}╔══════════════════════════════════════════════╗${RESET}"
-            echo -e "${BOLD}* ${RED}Failed to Configure AIDL files. Exiting.${RESET}"
-            echo -e "${BOLD}╚══════════════════════════════════════════════╝${RESET}"
+        if [ ! -d "$inc_dir" ]; then
+            echo -e "${BOLD}${RED}ERROR: versioned include dir not found: ${inc_dir}${RESET}"
+            exit 1
+        fi
+        if [ ! -d "$src_dir" ]; then
+            echo -e "${BOLD}${RED}ERROR: versioned src dir not found: ${src_dir}${RESET}"
             exit 1
         fi
 
-        cmake --build ${HAL_TOP_BUILD_DIR} -j$(nproc)
-        if [ $? -ne 0 ]; then
-            echo -e "${BOLD}╔══════════════════════════════════════════════╗${RESET}"
-            echo -e "${BOLD}* ${RED}Failed to Generate AIDL headers. Exiting.${RESET}"
-            echo -e "${BOLD}╚══════════════════════════════════════════════╝${RESET}"
-            exit 1
-        fi
-
-        # Set src/include paths for build_aidl_libs
-        HALIF_AIDL_SRC_DIR=$(realpath "${RDK_HAL_DIR}/${component}/${version}/src")
-        HALIF_AIDL_INC_DIR=$(realpath "${RDK_HAL_DIR}/${component}/${version}/include")
-
-        # Copy generated headers to build/usr/include so the test build can find them
-        local gen_inc_dir="${RDK_HAL_DIR}/out/build/include/${component}/${version}/include"
-        if [ -d "${gen_inc_dir}" ]; then
-            install -d "${BUILD_INSTALL_PREFIX}/include"
-            cp -apr "${gen_inc_dir}/." "${BUILD_INSTALL_PREFIX}/include/"
-        else
-            echo -e "${BOLD}${RED}ERROR: Generated include dir not found: ${gen_inc_dir}${RESET}"
-            exit 1
-        fi
+        echo -e "${BOLD}${GREEN}${component}${RESET}: version=${YELLOW}${version}${RESET} ${CYAN}(versions_released.yaml)${RESET}"
+        HALIF_AIDL_SRC_DIR=$(realpath "$src_dir")
+        HALIF_AIDL_INC_DIR=$(realpath "$inc_dir")
     done
 }
 
@@ -398,18 +393,20 @@ generate_hal_interfaces()
 ###############################################################################
 build_aidl_libs()
 {
-    make -j`nproc` -C "${AIDL_LIB_DIR}" TARGET=$TARGET VARIANT=CPP \
+    pushd ${AIDL_LIB_DIR}
+    make -j`nproc` \
         HALIF_AIDL_SRC_DIR="${HALIF_AIDL_SRC_DIR}" \
         HALIF_AIDL_INC_DIR="${HALIF_AIDL_INC_DIR}" \
         BINDER_SDK_INCLUDE_DIR="${LOCAL_BINDER_INCLUDE_DIR}" \
         BINDER_SDK_LIB_DIR="${LOCAL_BINDER_LIB_DIR}"
     if [ $? -ne 0 ]; then
         echo -e "${BOLD}╔══════════════════════════════════════════════╗${RESET}"
-        echo -e "${BOLD}* ${RED}Failed to build the AIDL Lib. Exiting.${RESET}"
+        echo -e "${BOLD}* ${RED}Failed to build the AIDL Lib. Exiting.${BOLD}*${RESET}"
         echo -e "${BOLD}╚══════════════════════════════════════════════╝${RESET}"
         exit 1
     fi
     echo "AIDL Build completed successfully."
+    popd
 }
 
 ###############################################################################
@@ -455,11 +452,11 @@ build_ut_core()
 build_halif_test()
 {
     # Build the tests
-    make -j`nproc` -C ${TOP}
+    make -j`nproc` -C ${TOP} TARGET=$TARGET
     if [ $? -ne 0 ]; then
-        echo -e "${BOLD}╔═════════════════════════════════════════════════╗${RESET}"
+        echo -e "${BOLD}╔════════════════════════════════════════════╗${RESET}"
         echo -e "${BOLD}* ${RED}Failed to build the main tests. Exiting.${RESET}"
-        echo -e "${BOLD}╚═════════════════════════════════════════════════╝${RESET}"
+        echo -e "${BOLD}╚════════════════════════════════════════════╝${RESET}"
         exit 1
     fi
 }
@@ -553,9 +550,17 @@ elif [ "$1" == "dist_clean" ]; then
 elif [ "$1" == "help" ]; then
     help
 elif [[ "$1" == [Tt]arget=* ]]; then
+    # Validate TARGET
+    valid_targets=("linux" "arm")
+    if [[ ! " ${valid_targets[*]} " =~ " ${TARGET} " ]]; then
+        echo -e "${BOLD}${RED}Invalid Target: ${TARGET}. Valid targets are: ${valid_targets[*]}${RESET}"
+        help
+        exit 1
+    fi
+    resolve_halif_versions
     setup_binder_sdk
     install_linux_binder
-    generate_hal_interfaces
+    install_halif_headers
     build_aidl_libs
     build_ut_core
     build_halif_test
