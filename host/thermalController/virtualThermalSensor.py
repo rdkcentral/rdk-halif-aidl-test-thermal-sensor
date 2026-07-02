@@ -49,46 +49,6 @@ class virtualThermalSensor(ThermalSensorControllerInterface):
         )
         self.session.write(cmd)
 
-    def triggerThermalStateChange(self, state: str, sensorName: str = "",
-                                  temperatureCelsius: float = 0.0,
-                                  timestampMonotonicMs: int = 0):
-        """
-        Simulate a thermal state-change event.
-
-        Sends a thermal_state_change command to the vcomponent control-plane.
-        The vcomponent expects:
-          IThermalSensor/command:              thermal_state_change
-          IThermalSensor/state:                <state string>
-          IThermalSensor/sensorName:           <sensorName>          (optional)
-          IThermalSensor/temperatureCelsius:   <temp>                (optional)
-          IThermalSensor/timestampMonotonicMs: <ts>
-
-        Args:
-            state (str): Target state.  One of:
-                         "NORMAL" | "CRITICAL_TEMPERATURE_EXCEEDED" |
-                         "CRITICAL_TEMPERATURE_RECOVERED" | "CRITICAL_SHUTDOWN_IMMINENT"
-            sensorName (str): Optional sensor name for the TemperatureReading payload.
-                              Pass empty string to omit the temperature reading.
-            temperatureCelsius (float): Temperature to include in the payload (if sensorName given).
-            timestampMonotonicMs (int): Monotonic timestamp (ms); 0 uses wall-clock ms.
-        """
-        if timestampMonotonicMs == 0:
-            timestampMonotonicMs = int(time.time() * 1000)
-
-        payload = {
-            "IThermalSensor": {
-                "command": "thermal_state_change",
-                "state": state,
-                "timestampMonotonicMs": timestampMonotonicMs,
-            }
-        }
-
-        if sensorName:
-            payload["IThermalSensor"]["sensorName"] = sensorName
-            payload["IThermalSensor"]["temperatureCelsius"] = temperatureCelsius
-
-        self._sendCommand(payload)
-
     def injectTemperatureUpdate(self, sensorName: str, temperatureCelsius: float,
                                 timestampMonotonicMs: int = 0):
         """

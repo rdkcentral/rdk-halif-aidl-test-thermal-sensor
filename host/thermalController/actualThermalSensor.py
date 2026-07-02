@@ -35,27 +35,6 @@ class actualThermalSensor(ThermalSensorControllerInterface):
         super().__init__(session, prompt, port)
         self.testUserResponse = utUserResponse(session, prompt)
 
-    def triggerThermalStateChange(self, state: str, sensorName: str = "",
-                                  temperatureCelsius: float = 0.0,
-                                  timestampMonotonicMs: int = 0):
-        """
-        Prompt the operator to manually trigger a thermal state change on real hardware.
-
-        Args:
-            state (str): Expected target state (e.g. "CRITICAL_TEMPERATURE_EXCEEDED").
-            sensorName (str): Optional sensor name for context in the prompt.
-            temperatureCelsius (float): Optional temperature for context in the prompt.
-            timestampMonotonicMs (int): Unused on real hardware.
-
-        Returns:
-            bool: True if the operator confirmed the state change occurred.
-        """
-        msg = f"Manually trigger thermal state '{state}'"
-        if sensorName:
-            msg += f" on sensor '{sensorName}' at {temperatureCelsius}\u00b0C"
-        msg += ". Has the device reached the expected state? (Y/N):"
-        return self.testUserResponse.getUserYN(msg)
-
     def injectTemperatureUpdate(self, sensorName: str, temperatureCelsius: float,
                                 timestampMonotonicMs: int = 0):
         """

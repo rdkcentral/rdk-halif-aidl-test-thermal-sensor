@@ -145,6 +145,9 @@ class thermalSensorHelperClass(utHelperClass):
             self.cpe.get("prompt"),
             controllerPort)
 
+        time.sleep(10)
+        self.resetAllSensorsToNormal()
+
     def readYaml(self, yaml_path: str) -> dict:
         """
         Reads a YAML file and returns its content as a dictionary.
@@ -234,9 +237,9 @@ class thermalSensorHelperClass(utHelperClass):
         sensors = self.getSensorListFromHFP()
         for s in sensors:
             self.log.info(
-                f"[resetAllSensorsToNormal] Resetting '{s['name']}' to NORMAL")
-            self.thermalSensorDevice.triggerThermalStateChange(
-                state="NORMAL",
+                f"[resetAllSensorsToNormal] Injecting normal temperature for '{s['name']}' "
+                f"({s['normal_temp']}°C)")
+            self.thermalSensorDevice.injectTemperatureUpdate(
                 sensorName=s['name'],
                 temperatureCelsius=s['normal_temp'])
             time.sleep(0.5)
