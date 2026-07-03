@@ -48,6 +48,7 @@ LOCAL_BINDER_TOOLCHAIN_DIR=${BINDER_SOURCE_DIR:-${RDK_HAL_DIR}/build-tools/linux
 LOCAL_BINDER_SDK_DIR=${BINDER_SDK_DIR:-${RDK_HAL_DIR}/out/target}
 LOCAL_BINDER_INCLUDE_DIR=${BINDER_SDK_INCLUDE_DIR:-${RDK_HAL_DIR}/out/build/include/binder_sdk}
 LOCAL_BINDER_LIB_DIR=${BINDER_SDK_LIB_DIR:-${LOCAL_BINDER_SDK_DIR}/lib/binder}
+BINDER_SDK_VERSION_FILE=${BINDER_SDK_VERSION_FILE:-${TOP}/binder_sdk.version}
 
 mkdir -p $TOP_BUILD_DIR
 
@@ -63,14 +64,6 @@ for arg in "$@"; do
         TARGET="${arg#*=}"
     fi
 done
-
-# Validate TARGET
-valid_targets=("linux" "arm")
-if [[ ! " ${valid_targets[@]} " =~ " ${TARGET} " ]]; then
-    echo -e "${BOLD}${RED}Invalid Target: $TARGET. Valid targets are: ${valid_targets[@]}${RESET}"
-    help
-    exit 1
-fi
 
 ###############################################################################
 # Cross-compile ARM binder runtime (libbinder.so, libutils.so, etc.) from
@@ -91,7 +84,7 @@ build_arm_binder()
         echo "Cloning linux_binder_idl for ARM build..."
         local _binder_version
         _binder_version=$(grep -vE '^[[:space:]]*(#|$)' \
-            "${RDK_HAL_DIR}/binder_sdk.version" 2>/dev/null \
+            "${BINDER_SDK_VERSION_FILE}" 2>/dev/null \
             | head -1 | tr -d '[:space:]')
         _binder_version="${_binder_version:-2.0.0}"
 
@@ -200,6 +193,26 @@ setup_binder_sdk()
     local binder_toolchain_dir="${LOCAL_BINDER_TOOLCHAIN_DIR}"
     local sdk_ready="${LOCAL_BINDER_SDK_DIR}/.sdk_ready"
     if [ "${TARGET}" = "arm" ]; then
+        local canonical_binder_toolchain_dir="${RDK_HAL_DIR}/build-tools/linux_binder_idl"
+        local normalized_binder_toolchain_dir="${binder_toolchain_dir%/}"
+
+        # Some shells/exported environments leave BINDER_SOURCE_DIR pointing at
+        # the CMake build directory (build/binder) instead of the binder
+        # source repo. Normalize that here for the ARM host-tools/bootstrap
+        # path so build_binder.sh always gets a real source tree.
+        if [[ "${normalized_binder_toolchain_dir}" == "${RDK_HAL_DIR}/build/binder" ]] || [[ "${normalized_binder_toolchain_dir}" == */build/binder ]]; then
+            echo -e "${BOLD}${YELLOW}Ignoring invalid BINDER_SOURCE_DIR (${binder_toolchain_dir}); using ${canonical_binder_toolchain_dir}${RESET}"
+            binder_toolchain_dir="${canonical_binder_toolchain_dir}"
+            LOCAL_BINDER_TOOLCHAIN_DIR="${canonical_binder_toolchain_dir}"
+        elif [ ! -f "${normalized_binder_toolchain_dir}/CMakeLists.txt" ] && [ -f "${canonical_binder_toolchain_dir}/CMakeLists.txt" ]; then
+            echo -e "${BOLD}${YELLOW}Ignoring unusable BINDER_SOURCE_DIR (${binder_toolchain_dir}); using ${canonical_binder_toolchain_dir}${RESET}"
+            binder_toolchain_dir="${canonical_binder_toolchain_dir}"
+            LOCAL_BINDER_TOOLCHAIN_DIR="${canonical_binder_toolchain_dir}"
+        else
+            binder_toolchain_dir="${normalized_binder_toolchain_dir}"
+            LOCAL_BINDER_TOOLCHAIN_DIR="${normalized_binder_toolchain_dir}"
+        fi
+
         # Option 1: user supplied a pre-built ARM binder SDK
         if [ -n "${BINDER_SDK_DIR:-}" ]; then
             echo "ARM build: using pre-built Binder SDK at ${BINDER_SDK_DIR}"
@@ -225,12 +238,27 @@ setup_binder_sdk()
         local _ARCH="${ARCH:-}" _CMAKE_TOOLCHAIN_FILE="${CMAKE_TOOLCHAIN_FILE:-}"
         local _OECORE_NATIVE="${OECORE_NATIVE_SYSROOT:-}"
         local _OECORE_TARGET="${OECORE_TARGET_SYSROOT:-}"
+        local _PATH="${PATH}"
+        local _BINDER_SOURCE_DIR="${BINDER_SOURCE_DIR:-}"
+        local _BINDER_BUILD_DIR="${BINDER_BUILD_DIR:-}"
+        local _BINDER_SDK_DIR="${BINDER_SDK_DIR:-}"
+        local _BINDER_SDK_INCLUDE_DIR="${BINDER_SDK_INCLUDE_DIR:-}"
         unset CC CXX CFLAGS CXXFLAGS LDFLAGS ARCH CMAKE_TOOLCHAIN_FILE
         unset OECORE_NATIVE_SYSROOT OECORE_TARGET_SYSROOT
-        export M4=/usr/bin/m4
+        unset BINDER_SOURCE_DIR BINDER_BUILD_DIR BINDER_SDK_DIR BINDER_SDK_INCLUDE_DIR
         (
             cd "${RDK_HAL_DIR}"
-            ./build_binder.sh
+            env -i \
+            HOME="${HOME:-}" \
+            USER="${USER:-}" \
+            TERM="${TERM:-dumb}" \
+            PATH="/usr/bin:/bin:${_PATH}" \
+            M4=/usr/bin/m4 \
+            BINDER_SOURCE_DIR="${binder_toolchain_dir}" \
+            BINDER_BUILD_DIR="${RDK_HAL_DIR}/build/binder" \
+            BINDER_SDK_DIR="${LOCAL_BINDER_SDK_DIR}" \
+            BINDER_SDK_INCLUDE_DIR="${RDK_HAL_DIR}/out/build" \
+            bash ./build_binder.sh
         ) || {
             echo -e "${BOLD}${RED}ERROR: build_binder.sh (host tools) failed.${RESET}"
             exit 1
@@ -246,6 +274,10 @@ setup_binder_sdk()
         [ -n "${_CMAKE_TOOLCHAIN_FILE}" ] && export CMAKE_TOOLCHAIN_FILE="${_CMAKE_TOOLCHAIN_FILE}"
         [ -n "${_OECORE_NATIVE}" ]        && export OECORE_NATIVE_SYSROOT="${_OECORE_NATIVE}"
         [ -n "${_OECORE_TARGET}" ]        && export OECORE_TARGET_SYSROOT="${_OECORE_TARGET}"
+        [ -n "${_BINDER_SOURCE_DIR}" ]    && export BINDER_SOURCE_DIR="${_BINDER_SOURCE_DIR}"
+        [ -n "${_BINDER_BUILD_DIR}" ]     && export BINDER_BUILD_DIR="${_BINDER_BUILD_DIR}"
+        [ -n "${_BINDER_SDK_DIR}" ]       && export BINDER_SDK_DIR="${_BINDER_SDK_DIR}"
+        [ -n "${_BINDER_SDK_INCLUDE_DIR}" ] && export BINDER_SDK_INCLUDE_DIR="${_BINDER_SDK_INCLUDE_DIR}"
 
         # Step 2: cross-compile ARM binder runtime.
         rm -f "${LOCAL_BINDER_SDK_DIR}/.sdk_ready"
@@ -278,8 +310,8 @@ setup_binder_sdk()
 
 ###############################################################################
 # Install Binder service manager, headers and libraries into build/usr/ from
-# the rdk-halif-aidl Binder SDK (built by verify_local_binder_sdk).
-# Must be called after verify_local_binder_sdk().
+# the rdk-halif-aidl Binder SDK staged by setup_binder_sdk().
+# Must be called after setup_binder_sdk().
 ###############################################################################
 install_linux_binder()
 {
@@ -401,7 +433,7 @@ build_aidl_libs()
         BINDER_SDK_LIB_DIR="${LOCAL_BINDER_LIB_DIR}"
     if [ $? -ne 0 ]; then
         echo -e "${BOLD}╔══════════════════════════════════════════════╗${RESET}"
-        echo -e "${BOLD}* ${RED}Failed to build the AIDL Lib. Exiting.${BOLD}*${RESET}"
+        echo -e "${BOLD}* ${RED}Failed to build the AIDL Lib. Exiting.${RESET}"
         echo -e "${BOLD}╚══════════════════════════════════════════════╝${RESET}"
         exit 1
     fi
@@ -472,16 +504,17 @@ install_test()
     install -t ${INSTALL_PATH} ${TOP_BUILD_DIR}/usr/lib/*
     install -t ${INSTALL_PATH} run.sh
 
-    # Remove bundled binder runtime libs — the target's system libbinder.so is
-    # compatible with its kernel binder driver. Bundling our compiled version
-    # causes a kernel/userspace protocol mismatch at runtime.
-    rm -f "${INSTALL_PATH}"/libbinder.so* \
-          "${INSTALL_PATH}"/libutils.so* \
-          "${INSTALL_PATH}"/libbase.so* \
-          "${INSTALL_PATH}"/libcutils.so* \
-          "${INSTALL_PATH}"/libcutils_sockets.so* \
-          "${INSTALL_PATH}"/liblog.so* \
-          "${INSTALL_PATH}"/servicemanager
+    # On ARM targets, prefer system binder runtime to avoid kernel/userspace
+    # binder protocol mismatch from packaged host-built runtime libs.
+    if [ "${TARGET}" = "arm" ]; then
+        rm -f "${INSTALL_PATH}"/libbinder.so* \
+              "${INSTALL_PATH}"/libutils.so* \
+              "${INSTALL_PATH}"/libbase.so* \
+              "${INSTALL_PATH}"/libcutils.so* \
+              "${INSTALL_PATH}"/libcutils_sockets.so* \
+              "${INSTALL_PATH}"/liblog.so* \
+              "${INSTALL_PATH}"/servicemanager
+    fi
 
     cp -r ${PROFILES_DIR} ${INSTALL_PATH}
     cp -r "${TOP}/test_configuration" ${INSTALL_PATH}
@@ -538,7 +571,12 @@ help()
 echo -e "${BOLD}${GREEN}VTS Version                  : ${RESET}${YELLOW}$(git rev-parse --abbrev-ref HEAD)${RESET}"
 echo -e "${BOLD}${GREEN}UT_CORE_VERSION              : ${RESET}${YELLOW}$UT_CORE_VERSION${RESET}"
 echo -e "${BOLD}${GREEN}RDK_HALIF_AIDL_VERSION       : ${RESET}${YELLOW}$RDK_HALIF_AIDL_VERSION${RESET}"
+echo -e "${BOLD}${GREEN}LOCAL_BINDER_TOOLCHAIN_DIR   : ${RESET}${YELLOW}$LOCAL_BINDER_TOOLCHAIN_DIR${RESET}"
 echo -e "${BOLD}${GREEN}LOCAL_BINDER_SDK_DIR         : ${RESET}${YELLOW}$LOCAL_BINDER_SDK_DIR${RESET}"
+echo -e "${BOLD}${GREEN}LOCAL_BINDER_INCLUDE_DIR     : ${RESET}${YELLOW}$LOCAL_BINDER_INCLUDE_DIR${RESET}"
+echo -e "${BOLD}${GREEN}LOCAL_BINDER_LIB_DIR         : ${RESET}${YELLOW}$LOCAL_BINDER_LIB_DIR${RESET}"
+echo -e "${BOLD}${GREEN}BINDER_SDK_VERSION_FILE      : ${RESET}${YELLOW}$BINDER_SDK_VERSION_FILE${RESET}"
+echo -e "${BOLD}${GREEN}TARGET                       : ${RESET}${YELLOW}$TARGET${RESET}"
 
 ###############################################################################
 # Main script execution starts here

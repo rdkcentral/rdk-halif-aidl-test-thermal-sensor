@@ -145,6 +145,7 @@ class thermalSensorHelperClass(utHelperClass):
             self.cpe.get("prompt"),
             controllerPort)
 
+        # Allow the thermal control-plane time to start after deployment.
         time.sleep(10)
         self.resetAllSensorsToNormal()
 
