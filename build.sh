@@ -107,6 +107,10 @@ build_arm_binder()
     #
     # cmake 3.22+ auto-loads OEToolchainConfig.cmake even when CMAKE_TOOLCHAIN_FILE
     # is cleared. Writing our own toolchain file takes precedence over that.
+    if [ -z "${CC:-}" ] || [ -z "${CXX:-}" ]; then
+        echo -e "${BOLD}${RED}ERROR: CC/CXX not set for ARM binder build. Source the cross-toolchain env or set BINDER_SDK_DIR to a prebuilt Binder SDK.${RESET}"
+        exit 1
+    fi
     local cc_bin cxx_bin cc_flags
     cc_bin=$(echo "${CC}" | awk '{print $1}')
     cxx_bin=$(echo "${CXX}" | awk '{print $1}')
@@ -353,8 +357,10 @@ setup_binder_sdk()
             # linux_binder_idl defaults to TARGET_LIB32_VERSION=ON (protocol 7 / BINDER_IPC_32BIT).
             # For a 64-bit Linux host/vdevice we need protocol 8.  Patch build_binder.sh to
             # pass -DTARGET_LIB64_VERSION=ON so cmake selects the 64-bit path.
-            sed -i 's/-DBUILD_HOST_AIDL=ON/-DBUILD_HOST_AIDL=ON -DTARGET_LIB64_VERSION=ON/g' \
-                "${RDK_HAL_DIR}/build_binder.sh"
+            if ! grep -q 'TARGET_LIB64_VERSION=ON' "${RDK_HAL_DIR}/build_binder.sh"; then
+                sed -i 's/-DBUILD_HOST_AIDL=ON/-DBUILD_HOST_AIDL=ON -DTARGET_LIB64_VERSION=ON/g' \
+                    "${RDK_HAL_DIR}/build_binder.sh"
+            fi
             BINDER_SOURCE_DIR="${binder_toolchain_dir}" "${RDK_HAL_DIR}/build_binder.sh" || {
                 echo -e "${BOLD}${RED}ERROR: build_binder.sh failed. Cannot continue.${RESET}"
                 exit 1

@@ -31,7 +31,7 @@ AIDL_OBJ_DIR := $(BUILD_DIR)/obj/aidl_lib
 
 # Versioned src/include dirs resolved from rdk-halif-aidl by build.sh
 # Guard errors so 'make clean' works without these being set
-ifneq ($(MAKECMDGOALS),clean)
+ifeq ($(filter clean,$(MAKECMDGOALS)),)
 HALIF_AIDL_SRC_DIR ?= $(error HALIF_AIDL_SRC_DIR is not set - run via build.sh)
 HALIF_AIDL_INC_DIR ?= $(error HALIF_AIDL_INC_DIR is not set - run via build.sh)
 BINDER_SDK_INCLUDE_DIR ?= $(error BINDER_SDK_INCLUDE_DIR is not set - run via build.sh)
