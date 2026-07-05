@@ -30,6 +30,10 @@ RESET='\033[0m'
 declare -r TOP="$(dirname "$(realpath "$0")")"
 RDK_HALIF_AIDL_VERSION="${RDK_HALIF_AIDL_VERSION="main"}"
 
+declare -A HALIF_COMPONENTS=(
+  [sensor]="current"
+)
+
 # Define important workspace paths.
 declare -r UT_CORE_DIR="${TOP}/ut-core"
 declare -r TOP_BUILD_DIR="${TOP}/build"
@@ -393,14 +397,17 @@ build_halif_modules()
         return
     fi
 
-    echo "Building sensor HAL module from versions_released.yaml..."
+    local component
+    component="${!HALIF_COMPONENTS[@]}"
+
+    echo "Building ${component} HAL module from versions_released.yaml..."
     local default_version
     default_version=$(grep -m1 '^default:' "$manifest_file" | awk '{print $2}')
     default_version="${default_version:-current}"
 
-    local sensor_version
-    sensor_version=$(grep -m1 '^[[:space:]]*sensor:' "$manifest_file" | awk '{print $2}')
-    sensor_version="${sensor_version:-$default_version}"
+    local component_version
+    component_version=$(grep -m1 "^[[:space:]]*${component}:" "$manifest_file" | awk '{print $2}')
+    component_version="${component_version:-$default_version}"
 
     local sdk_dir_arg=""
     if [ "${TARGET}" = "arm" ] && [ -n "${BINDER_SDK_DIR:-}" ]; then
@@ -408,10 +415,10 @@ build_halif_modules()
     fi
     (
         cd "${RDK_HAL_DIR}"
-        ./build_modules.sh sensor --version "${sensor_version}" ${sdk_dir_arg}
+        ./build_modules.sh "${component}" --version "${component_version}" ${sdk_dir_arg}
     ) || {
         echo -e "${BOLD}╔══════════════════════════════════════════════════════════════════════╗${RESET}"
-        echo -e "${BOLD}* ${RED}Failed to build sensor HAL module. Exiting.${RESET}"
+        echo -e "${BOLD}* ${RED}Failed to build ${component} HAL module. Exiting.${RESET}"
         echo -e "${BOLD}╚══════════════════════════════════════════════════════════════════════╝${RESET}"
         exit 1
     }
