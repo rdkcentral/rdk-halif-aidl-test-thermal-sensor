@@ -69,11 +69,19 @@ endif
 SRC_DIRS := $(THERMALSENSOR_TEST_DIR)
 SRC_DIRS += $(ROOT_DIR)/test
 
-INC_DIRS := $(ROOT_DIR)/build/usr/include
+HALIF_OUT_DIR        := $(ROOT_DIR)/rdk-halif-aidl/out
+HALIF_LIB_DIR        := $(HALIF_OUT_DIR)/target/lib/halif
+-include $(HALIF_OUT_DIR)/halif_generated.mk
+
+INC_DIRS := $(HALIF_INC_DIRS)
+INC_DIRS += $(ROOT_DIR)/build/usr/include
 INC_DIRS += $(SRC_DIRS)
 
 XLDFLAGS := -L$(ROOT_DIR)/build/usr/lib
 XLDFLAGS += -Wl,-rpath-link=$(ROOT_DIR)/build/usr/lib -Wl,--export-dynamic -Wl,-rpath,.
+XLDFLAGS += -L$(HALIF_LIB_DIR)
+XLDFLAGS += -Wl,-rpath-link=$(HALIF_LIB_DIR)
+XLDFLAGS += $(HALIF_MODULE_LIBS)
 ifeq ($(TARGET),arm)
 # ARM openssl is built by ut-core; add its lib dir before -lssl/-lcrypto so the
 # linker can resolve them (ut-control appends static paths, but they come after
@@ -82,7 +90,6 @@ XLDFLAGS += -L$(ROOT_DIR)/ut-core/framework/ut-control/build/$(TARGET)/openssl/l
 XLDFLAGS += -Wl,-rpath-link=$(ROOT_DIR)/ut-core/framework/ut-control/build/$(TARGET)/openssl/lib
 endif
 XLDFLAGS += -lssl -lcrypto -lbinder -lutils
-XLDFLAGS += -laidl_client
 
 # required for std::optional
 CXXFLAGS += -std=c++17
