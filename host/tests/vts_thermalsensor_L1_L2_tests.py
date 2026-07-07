@@ -97,18 +97,18 @@ class VTS_THERMALSENSOR_L1_L2_Tests(thermalSensorHelperClass):
             test_cases = testsuite.get("test_cases")
 
             if len(test_cases) == 1 and test_cases[0] == "all":
-                self.log.stepStart(f'Test Suite: {testsuite_name} Run all Test Cases')
+                self.log.stepStart(f'Test Suit: {testsuite_name} Run all Test Cases')
                 result = self.runTest(testsuite)
-                self.log.stepResult(result, f'Test Suite: {testsuite_name} Run all Test Cases')
+                self.log.stepResult(result, f'Test Suit: {testsuite_name} Run all Test Cases')
                 if not result:
                     finalresult = False
             else:
                 for test_case in test_cases:
-                    self.log.stepStart(f'Test Suite: {testsuite_name} Test Case: {test_case}')
+                    self.log.stepStart(f'Test Suit: {testsuite_name} Test Case: {test_case}')
                     result = self.runTest(testsuite, test_case)
                     if not result:
                         finalresult = False
-                    self.log.stepResult(result, f'Test Suite: {testsuite_name} Test Case: {test_case}')
+                    self.log.stepResult(result, f'Test Suit: {testsuite_name} Test Case: {test_case}')
 
         return finalresult
 
