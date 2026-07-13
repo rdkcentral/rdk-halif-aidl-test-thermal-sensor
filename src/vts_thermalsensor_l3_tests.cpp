@@ -81,7 +81,7 @@ public:
         if (mListener)
         {
             bool _r;
-            // Service may have restarted after CRITICAL_SHUTDOWN_IMMINENT — ignore dead-object errors
+            // Service may have restarted after CRITICAL_SHUTDOWN_IMMINENT — ignore unregister errors
             auto status = gTHERMALSENSORHandle->unregisterEventListener(mListener, &_r);
             if (!status.isOk())
             {
