@@ -145,6 +145,10 @@ class thermalSensorHelperClass(utHelperClass):
             self.cpe.get("prompt"),
             controllerPort)
 
+        # Allow the thermal control-plane time to start after deployment.
+        time.sleep(10)
+        self.resetAllSensorsToNormal()
+
     def readYaml(self, yaml_path: str) -> dict:
         """
         Reads a YAML file and returns its content as a dictionary.
@@ -234,9 +238,9 @@ class thermalSensorHelperClass(utHelperClass):
         sensors = self.getSensorListFromHFP()
         for s in sensors:
             self.log.info(
-                f"[resetAllSensorsToNormal] Resetting '{s['name']}' to NORMAL")
-            self.thermalSensorDevice.triggerThermalStateChange(
-                state="NORMAL",
+                f"[resetAllSensorsToNormal] Injecting normal temperature for '{s['name']}' "
+                f"({s['normal_temp']}°C)")
+            self.thermalSensorDevice.injectTemperatureUpdate(
                 sensorName=s['name'],
                 temperatureCelsius=s['normal_temp'])
             time.sleep(0.5)
@@ -274,7 +278,7 @@ class thermalSensorHelperClass(utHelperClass):
             triggerThread.start()
 
         self.log.stepStart(
-            f"Test Suite: {THERMALSENSOR_L3_TEST_SUITE_NAME}  Test Case: {testcase}")
+            f"Test Suit: {THERMALSENSOR_L3_TEST_SUITE_NAME}  Test Case: {testcase}")
         output = self.utMenu.select(
             THERMALSENSOR_L3_TEST_SUITE_NAME, testcase, None, self.waitTime, False)
         if triggerThread is not None:
@@ -285,5 +289,5 @@ class thermalSensorHelperClass(utHelperClass):
 
         self.log.stepResult(
             results,
-            f"Test Suite: {THERMALSENSOR_L3_TEST_SUITE_NAME}  Test Case: {testcase}")
+            f"Test Suit: {THERMALSENSOR_L3_TEST_SUITE_NAME}  Test Case: {testcase}")
         return results
