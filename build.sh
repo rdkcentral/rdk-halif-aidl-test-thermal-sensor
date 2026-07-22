@@ -172,7 +172,7 @@ TOOLCHAIN_EOF
             -exec mv {} "${ARM_BINDER_INCLUDE}/include/binder_sdk/" \; 2>/dev/null || true
         rmdir "${ARM_BINDER_SDK}/include" 2>/dev/null || true
     fi
-    mkdir -p "${ARM_BINDER_SDK}/lib/halif"
+    mkdir -p "${ARM_BINDER_SDK}/lib/rdk-halif-aidl"
     touch "${ARM_BINDER_SDK}/.sdk_ready"
     touch "${ARM_BINDER_INCLUDE}/.sdk_ready"
     echo "ARM Binder SDK built and installed to ${ARM_BINDER_SDK}"
@@ -185,7 +185,7 @@ TOOLCHAIN_EOF
 create_halif_softlinks()
 {
     local YAML="${RDK_HAL_DIR}/versions_released.yaml"
-    local LIB_DIR="${RDK_HAL_DIR}/out/target/lib/halif"
+    local LIB_DIR="${RDK_HAL_DIR}/out/target/lib/rdk-halif-aidl"
     local in_components=0
 
     if [ ! -f "$YAML" ]; then
@@ -261,7 +261,7 @@ checkout_halif_repo()
         echo "ERROR: Failed to checkout branch ${RDK_HALIF_AIDL_VERSION}."
         exit 1
     }
-    rm -f "${RDK_HAL_DIR}/out/target/lib/halif/.halif_modules_ready"
+    rm -f "${RDK_HAL_DIR}/out/target/lib/rdk-halif-aidl/.halif_modules_ready"
 }
 
 ###############################################################################
@@ -365,7 +365,7 @@ setup_binder_sdk()
 ###############################################################################
 build_halif_modules()
 {
-    local HALIF_LIB_DIR="${RDK_HAL_DIR}/out/target/lib/halif"
+    local HALIF_LIB_DIR="${RDK_HAL_DIR}/out/target/lib/rdk-halif-aidl"
     local HALIF_READY="${HALIF_LIB_DIR}/.halif_modules_ready"
     local manifest_file="${RDK_HAL_DIR}/versions_released.yaml"
 
@@ -590,7 +590,7 @@ install_test()
           "${INSTALL_PATH}"/servicemanager
 
     # Install versioned halif libs and their softlinks from the snapshot build
-    local HALIF_LIB_DIR="${RDK_HAL_DIR}/out/target/lib/halif"
+    local HALIF_LIB_DIR="${RDK_HAL_DIR}/out/target/lib/rdk-halif-aidl"
     if [ -d "${HALIF_LIB_DIR}" ]; then
         # Dereference versioned libs (they may be symlinks to cmake build output)
         find "${HALIF_LIB_DIR}" -maxdepth 1 -name "lib*-v*-cpp.so" \
