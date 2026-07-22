@@ -26,24 +26,6 @@ class ThermalSensorControllerInterface(metaclass=ABCMeta):
         self.port = port
 
     @abstractmethod
-    def triggerThermalStateChange(self, state: str, sensorName: str = "",
-                                  temperatureCelsius: float = 0.0,
-                                  timestampMonotonicMs: int = 0):
-        """
-        Simulate a thermal state-change event.
-
-        Args:
-            state (str): Target state string.  One of:
-                         "NORMAL" | "CRITICAL_TEMPERATURE_EXCEEDED" |
-                         "CRITICAL_TEMPERATURE_RECOVERED" | "CRITICAL_SHUTDOWN_IMMINENT"
-            sensorName (str): Optional sensor name for the TemperatureReading payload.
-                              Pass empty string to omit the temperature reading.
-            temperatureCelsius (float): Temperature to include in the payload (if sensorName given).
-            timestampMonotonicMs (int): Monotonic timestamp to include in the payload.
-        """
-        pass
-
-    @abstractmethod
     def injectTemperatureUpdate(self, sensorName: str, temperatureCelsius: float,
                                 timestampMonotonicMs: int = 0):
         """
