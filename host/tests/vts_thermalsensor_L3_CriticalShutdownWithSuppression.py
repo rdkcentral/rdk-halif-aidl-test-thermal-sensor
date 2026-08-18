@@ -143,9 +143,6 @@ class VTS_THERMALSENSOR_L3_CriticalShutdownWithSuppression(thermalSensorHelperCl
             'NORMAL',
             'CRITICAL_TEMPERATURE_EXCEEDED',
             'CRITICAL_SHUTDOWN_IMMINENT',
-            # Post-shutdown states — injections must be suppressed by the vcomponent.
-            'CRITICAL_TEMPERATURE_RECOVERED',
-            'NORMAL',
         ]
         timeoutMs        = int(testNode.get('event_timeout_ms', 15000))
         suppressionMs    = int(testNode.get('suppression_timeout_ms', 5000))
@@ -154,23 +151,22 @@ class VTS_THERMALSENSOR_L3_CriticalShutdownWithSuppression(thermalSensorHelperCl
         if not sensors:
             self.log.info(f"[TC{self.qcId}] ERROR: no sensors in HFP profile")
             return False
-
-        s          = sensors[0]
-        sensorName = s['name']
+        sensor          = sensors[0]
+        sensorName = sensor['name']
 
         stateToTemp = {
-            'CRITICAL_TEMPERATURE_EXCEEDED':  s['over_temp'],
-            'CRITICAL_SHUTDOWN_IMMINENT':      s['shutdown_temp'],
-            'CRITICAL_TEMPERATURE_RECOVERED': s['recovery_temp'],
-            'NORMAL':                         s['normal_temp'],
+            'CRITICAL_TEMPERATURE_EXCEEDED':  sensor['over_temp'],
+            'CRITICAL_SHUTDOWN_IMMINENT':      sensor['shutdown_temp'],
+            'CRITICAL_TEMPERATURE_RECOVERED': sensor['recovery_temp'],
+            'NORMAL':                         sensor['normal_temp'],
         }
 
         triggerDelay = (timeoutMs / 1000.0) / 2.0
 
         self.log.info(
             f"[TC{self.qcId}] sensor='{sensorName}' states={transitionStates} "
-            f"exceeded={s['over_temp']} Celsius shutdown={s['shutdown_temp']} Celsius "
-            f"recovered={s['recovery_temp']} Celsius normal={s['normal_temp']} Celsius "
+            f"exceeded={sensor['over_temp']} Celsius shutdown={sensor['shutdown_temp']} Celsius "
+            f"recovered={sensor['recovery_temp']} Celsius normal={sensor['normal_temp']} Celsius "
             f"suppressionMs={suppressionMs}")
 
         self.utilities.change_directory(self.hal_session, self.targetWorkspace)

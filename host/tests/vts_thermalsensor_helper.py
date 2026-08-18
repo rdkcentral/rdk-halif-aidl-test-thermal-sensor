@@ -192,11 +192,13 @@ class thermalSensorHelperClass(utHelperClass):
             exceeded  = float(triggers.get('critical_temperature_exceeded_celsius',  95.0))
             recovered = float(triggers.get('critical_temperature_recovered_celsius', 80.0))
             shutdown  = float(triggers.get('entering_critical_shutdown_celsius',     110.0))
+            exceeded_margin  = (shutdown  - exceeded)  / 2.0
+            recovery_margin  = (exceeded  - recovered) / 2.0
             sensors.append({
                 'name':          name,
-                'over_temp':     exceeded  + 2.0,
-                'shutdown_temp': shutdown  + 2.0,
-                'recovery_temp': recovered - 2.0,
+                'over_temp':     exceeded  + exceeded_margin,
+                'shutdown_temp': shutdown  + exceeded_margin,
+                'recovery_temp': recovered - recovery_margin,
                 # normal_temp must satisfy: recovered < normal_temp <= exceeded
                 # so that TEMPERATURE_UPDATE from RECOVERED state transitions to NORMAL.
                 # Using reading range midpoint would be BELOW recovered for both sensors.
