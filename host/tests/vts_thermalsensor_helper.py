@@ -189,9 +189,13 @@ class thermalSensorHelperClass(utHelperClass):
         for s in hfp.get('sensor', {}).get('thermal', []):
             name      = str(s.get('sensorName', ''))
             triggers  = s.get('triggers', {})
+            policy = s.get('policy', {})
+            recovery = policy.get('recovery', {})
             exceeded  = float(triggers.get('critical_temperature_exceeded_celsius',  95.0))
             recovered = float(triggers.get('critical_temperature_recovered_celsius', 80.0))
             shutdown  = float(triggers.get('entering_critical_shutdown_celsius',     110.0))
+            shutdown_min_downtime_s = int(policy.get('shutdown_min_downtime_s', 60))
+            min_cooldown_seconds = int(recovery.get('min_cooldown_seconds', 60))
             exceeded_margin  = (shutdown  - exceeded)  / 2.0
             recovery_margin  = (exceeded  - recovered) / 2.0
             sensors.append({
@@ -204,6 +208,7 @@ class thermalSensorHelperClass(utHelperClass):
                 # Using reading range midpoint would be BELOW recovered for both sensors.
                 'normal_temp':   (recovered + exceeded) / 2.0,
                 'safe_temp':     recovered - 10.0,
+                'reboot_wait_time' :shutdown_min_downtime_s+min_cooldown_seconds,
             })
         return sensors
 

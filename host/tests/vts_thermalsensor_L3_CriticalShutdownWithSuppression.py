@@ -34,7 +34,7 @@ import os
 import sys
 import time
 import yaml
-
+import socket
 dir_path = os.path.dirname(os.path.realpath(__file__))
 sys.path.append(os.path.join(dir_path, "../"))
 sys.path.append(dir_path)
@@ -53,27 +53,49 @@ class VTS_THERMALSENSOR_L3_CriticalShutdownWithSuppression(thermalSensorHelperCl
 
     def __init__(self, log: logModule = None, moduleName: str = None):
         self.testName = "ThermalSensor_L3_CriticalShutdownWithSuppression"
-        qcId = "2"
-        super().__init__(self.testName, qcId, log, moduleName)
+        self.qcId = "2"
+        self.moduleName = moduleName
+        super().__init__(self.testName, self.qcId, log, self.moduleName)
 
-    def _verifyShutdownAndRecovery(self):
+    def _verifyShutdownAndRecovery(self, reboot_wait_time:int=900):
         """
         Verifies device recovery after a thermal shutdown event.
 
-        TODO:
             - After CRITICAL_SHUTDOWN_IMMINENT is triggered, run a PingTest to
               confirm the device is still alive.
             - Wait for ``shutdown_min_downtime_s`` + ``min_cooldown_seconds``
               (both defined in the HFP profile) before injecting the recovery
               temperature.
-            - Inject a recovery temperature and verify the device fires a
-              CRITICAL_TEMPERATURE_RECOVERED event.
             - Verify the boot reason reported after recovery is
               ``THERMAL_SHUTDOWN_RECOVERY`` (via IBoot.getBootReason()).
             - Refer to the thermal policy defined by expert engineering teams
               (not user-configurable).
         """
-        return True
+        self.log.stepStart(
+            f"Test Suit: VTS_L3_THERMALSENSOR  Test Case: {self.testName}: Verify for Device to shutdown")
+
+        result = self._waitForSsh(reboot_wait_time)
+        self.log.stepResult(
+            not result,
+            f"Test Suit: VTS_L3_THERMALSENSOR  Test Case: {self.testName} Verified for Device to shutdown")
+        if result:
+            self.log.error("Unable to verify the device shutdown+ cool down period")
+            return False
+        result = False
+        self.log.stepStart(
+                f"Test Suit: VTS_L3_THERMALSENSOR  Test Case: {self.testName}: Verify for Device to reboot")
+        if not self._waitForSsh(self.hal_session.address,self.hal_session.port, reboot_wait_time):
+            if self.testUserResponse.getUserYN(f"Please boot the Target device and Press\n? (Y/N):"):
+                result = self._waitForSsh(self.hal_session.address,self.hal_session.port, reboot_wait_time)
+            else:
+                self.log.error("Unable to verify the reboot after shutdown+ cool down period")
+                return result
+        else:
+            result = self._waitForSsh(self.hal_session.address,self.hal_session.port, reboot_wait_time)
+        self.log.stepResult(
+                result,
+                f"Test Suit: VTS_L3_THERMALSENSOR  Test Case: {self.testName} Verified for Device to reboot")
+        return result
 
     def _trigger(self, sensorName: str, transitionStates: list,
                  stateToTemp: dict, suppressionMs: int):
@@ -121,6 +143,28 @@ class VTS_THERMALSENSOR_L3_CriticalShutdownWithSuppression(thermalSensorHelperCl
                 time.sleep((suppressionMs / 1000.0) + INTER_PHASE_DELAY_S)
 
             prevState = state
+
+    def _waitForSsh(self, host="127.0.0.1", port=7722, timeout=180):
+        end = time.time() + timeout
+
+        while time.time() < end:
+            try:
+                with socket.create_connection((host, port), timeout=2) as s:
+                    s.settimeout(2)
+
+                    banner = s.recv(1024).decode("utf-8", errors="ignore")
+
+                    if banner.startswith("SSH-"):
+                        self.log.debug(f"SSH is up: {banner.strip()}")
+                        return True
+
+            except Exception as e:
+                self.log.debug(f"Waiting for SSH... {e}")
+
+            time.sleep(1)
+
+        self.log.debug("Timeout waiting for SSH")
+        return False
 
     def testFunction(self) -> bool:
         """
@@ -180,9 +224,7 @@ class VTS_THERMALSENSOR_L3_CriticalShutdownWithSuppression(thermalSensorHelperCl
                 sensorName, transitionStates, stateToTemp, suppressionMs),
             triggerDelay=triggerDelay)
 
-        result = result and self._verifyShutdownAndRecovery()
-        # Reset all sensors to NORMAL so subsequent tests start from a clean state.
-        self.resetAllSensorsToNormal()
+        result = result and self._verifyShutdownAndRecovery(sensor["reboot_wait_time"])
         return result
 
 if __name__ == "__main__":
