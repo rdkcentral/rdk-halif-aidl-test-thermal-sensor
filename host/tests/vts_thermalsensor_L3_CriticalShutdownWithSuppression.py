@@ -208,11 +208,7 @@ class VTS_THERMALSENSOR_L3_CriticalShutdownWithSuppression(thermalSensorHelperCl
         with open(self.paths["l3TestConfigFile"], 'r') as fh:
             l3cfg = yaml.safe_load(fh)
 
-        # TC2 drives NORMAL -> EXCEEDED -> CRITICAL_SHUTDOWN_IMMINENT (pre-shutdown
-        # phase, each event must be delivered), then injects additional states that
-        # the vcomponent must SUPPRESS after shutdown is reached.  The C++ binary
-        # waits suppressionTimeoutMs for each post-shutdown injection and asserts
-        # that no event arrives.
+        # TC2 drives NORMAL -> EXCEEDED -> CRITICAL_SHUTDOWN_IMMINENT
         testNode         = l3cfg['thermalsensor']['L3']
         transitionStates = [
             'NORMAL',
