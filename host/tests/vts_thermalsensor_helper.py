@@ -165,22 +165,9 @@ class thermalSensorHelperClass(utHelperClass):
 
     def getSensorListFromHFP(self) -> list:
         """
-        Reads all thermal sensors from the HFP profile and returns a list of
-        sensor dicts with pre-computed injection temperatures.
-
-        Each dict contains:
-          name          - sensor name string
-          over_temp     - exceeded threshold + 2°C  (triggers EXCEEDED)
-          shutdown_temp - shutdown threshold + 2°C  (triggers SHUTDOWN_IMMINENT)
-          recovery_temp - recovered threshold - 2°C (triggers RECOVERED)
-          normal_temp   - midpoint of (recovered, exceeded] range, satisfying
-                          recovered < normal_temp <= exceeded so that a
-                          TEMPERATURE_UPDATE from RECOVERED state transitions
-                          the vcomponent to NORMAL
-          safe_temp     - recovered threshold - 10°C (secondary pre-warm)
-
-        Returns:
-            list: One dict per sensor in HFP profile order.
+        Reads thermal sensors from the HFP profile and returns a list of sensor
+        configurations with computed test temperatures based on the configured
+        recovery, exceeded, and shutdown thresholds.
         """
         with open(self.paths["moduleHFPFile"], 'r') as fh:
             hfp = yaml.safe_load(fh)
