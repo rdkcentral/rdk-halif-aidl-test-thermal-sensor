@@ -258,7 +258,7 @@ graph TD
 | 3 | Register event listener | Valid `IThermalEventListener` | `registerEventListener()` returns `true`; status OK |
 | 4 | Python host injects a temperature above `critical_temperature_exceeded_celsius` to trigger `NORMAL → CRITICAL_TEMPERATURE_EXCEEDED` | `exceeded_threshold + 2°C` from HFP | Event received; `event.state == CRITICAL_TEMPERATURE_EXCEEDED`; `timestampMonotonicMs > 0` |
 | 5 | Call `getCurrentThermalState()` and assert `CRITICAL_TEMPERATURE_EXCEEDED` | — | State confirmed as `CRITICAL_TEMPERATURE_EXCEEDED` |
-| 6 | Python host injects a temperature above `entering_critical_shutdown_celsius` to trigger `CRITICAL_TEMPERATURE_EXCEEDED → CRITICAL_SHUTDOWN_IMMINENT` | `shutdown_threshold + 2°C` from HFP | Event received; `event.state == CRITICAL_SHUTDOWN_IMMINENT`; `timestampMonotonicMs > previous` |
+| 6 | Python host injects a temperature above `entering_critical_shutdown_celsius` to trigger `CRITICAL_TEMPERATURE_EXCEEDED → CRITICAL_SHUTDOWN_IMMINENT` | `shutdown_threshold + offset°C` from HFP | Event received; `event.state == CRITICAL_SHUTDOWN_IMMINENT`; `timestampMonotonicMs > previous` |
 | 7 | Call `getCurrentThermalState()` and assert `CRITICAL_SHUTDOWN_IMMINENT` | — | State confirmed as `CRITICAL_SHUTDOWN_IMMINENT` |
 | 8 | Listener unregistered by test teardown | Controller handle | `unregisterEventListener()` returns `true` |
 

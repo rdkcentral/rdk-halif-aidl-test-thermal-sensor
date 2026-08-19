@@ -1,6 +1,9 @@
 #!/usr/bin/env python3
 #** *****************************************************************************
 # *
+# * If not stated otherwise in this file or this component's LICENSE file the
+# * following copyright and licenses apply:
+# *
 # * Copyright 2026 RDK Management
 # *
 # * Licensed under the Apache License, Version 2.0 (the "License");
@@ -9,7 +12,13 @@
 # *
 # * http://www.apache.org/licenses/LICENSE-2.0
 # *
-#* ******************************************************************************
+# * Unless required by applicable law or agreed to in writing, software
+# * distributed under the License is distributed on an "AS IS" BASIS,
+# * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+# * See the License for the specific language governing permissions and
+# * limitations under the License.
+# *
+#** ******************************************************************************
 
 """
 L3 test: CriticalShutdownWithSuppression (TC2)
@@ -21,26 +30,23 @@ HFP profile.  Drives each state transition in sequence:
   States after SHUTDOWN               : inject temperature that the vcomponent
                                         must SUPPRESS (no event expected).
 
-Injection temperatures are derived per-sensor from the HFP profile:
-  EXCEEDED  -> exceeded + 2°C
-  SHUTDOWN  -> shutdown + 2°C
-  RECOVERED -> recovered - 2°C
-  NORMAL    -> midpoint of sensor_reading_range_celsius
-
-The primary sensor is the first sensor in the HFP profile.
 """
 
 import os
 import sys
 import time
+from paramiko import SSHClient
+import paramiko
 import yaml
 import socket
+
 dir_path = os.path.dirname(os.path.realpath(__file__))
 sys.path.append(os.path.join(dir_path, "../"))
 sys.path.append(dir_path)
 sys.path.append(os.path.join(dir_path, "..", "raft"))
 
 from raft.framework.core.logModule import logModule
+from raft.framework.plugins.ut_raft.utUserResponse import utUserResponse
 from vts_thermalsensor_helper import thermalSensorHelperClass
 
 INTER_PHASE_DELAY_S = 2.0
@@ -86,7 +92,8 @@ class VTS_THERMALSENSOR_L3_CriticalShutdownWithSuppression(thermalSensorHelperCl
         if not shutdown_observed:
             self.log.error("Unable to verify the device shutdown+ cool down period")
             return False
-
+        #wait time for device to up
+        time.sleep(60)
         self.log.stepStart(
                 f"Test Suit: VTS_L3_THERMALSENSOR  Test Case: {self.testName}: Verify for Device to reboot")
         result = self._waitForSsh(
@@ -197,6 +204,35 @@ class VTS_THERMALSENSOR_L3_CriticalShutdownWithSuppression(thermalSensorHelperCl
         )
         return True
 
+    def custom_reconnect(self, session, retries=20, delay=1):
+        """Attempt to reconnect the SSH session with retries and delay."""
+        try:
+            if session.shell:
+                session.shell.close()
+        except Exception:
+            pass
+        try:
+            if session.console:
+                session.console.close()
+        except Exception:
+            pass
+        session.shell = None
+        session.console = None
+        session.is_open = False
+        for attempt in range(retries):
+            self.log.info(f"Reconnect attempt {attempt + 1}...")
+            try:
+                session.console = SSHClient()
+                session.console.set_missing_host_key_policy(paramiko.MissingHostKeyPolicy())
+                if session.open():
+                    session.open_interactive_shell()
+                    return True
+            except Exception as e:
+                self.log.step(f"Reconnect attempt {attempt + 1} failed: {e}")
+            time.sleep(delay)
+        self.log.error("Failed to reconnect after multiple attempts.")
+        return False
+
     def testFunction(self) -> bool:
         """
         Reads transition_states from the L3 YAML config and injection temperatures
@@ -205,6 +241,7 @@ class VTS_THERMALSENSOR_L3_CriticalShutdownWithSuppression(thermalSensorHelperCl
         Returns:
             bool: True if the test passed, False otherwise.
         """
+        self.testUserResponse = utUserResponse()
         with open(self.paths["l3TestConfigFile"], 'r') as fh:
             l3cfg = yaml.safe_load(fh)
 
@@ -222,37 +259,41 @@ class VTS_THERMALSENSOR_L3_CriticalShutdownWithSuppression(thermalSensorHelperCl
         if not sensors:
             self.log.info(f"[TC{self.qcId}] ERROR: no sensors in HFP profile")
             return False
-        sensor          = sensors[0]
-        sensorName = sensor['name']
+        overallResult = True
+        for sensor in sensors:
+            sensorName = sensor['name']
 
-        stateToTemp = {
-            'CRITICAL_TEMPERATURE_EXCEEDED':  sensor['over_temp'],
-            'CRITICAL_SHUTDOWN_IMMINENT':      sensor['shutdown_temp'],
-            'CRITICAL_TEMPERATURE_RECOVERED': sensor['recovery_temp'],
-            'NORMAL':                         sensor['normal_temp'],
-        }
+            stateToTemp = {
+                'CRITICAL_TEMPERATURE_EXCEEDED':  sensor['over_temp'],
+                'CRITICAL_SHUTDOWN_IMMINENT':      sensor['shutdown_temp'],
+                'CRITICAL_TEMPERATURE_RECOVERED': sensor['recovery_temp'],
+                'NORMAL':                         sensor['normal_temp'],
+            }
 
-        triggerDelay = (timeoutMs / 1000.0) / 2.0
+            triggerDelay = (timeoutMs / 1000.0) / 2.0
 
-        self.log.info(
-            f"[TC{self.qcId}] sensor='{sensorName}' states={transitionStates} "
-            f"exceeded={sensor['over_temp']} Celsius shutdown={sensor['shutdown_temp']} Celsius "
-            f"recovered={sensor['recovery_temp']} Celsius normal={sensor['normal_temp']} Celsius "
-            f"suppressionMs={suppressionMs}")
+            self.log.info(
+                f"[TC{self.qcId}] sensor='{sensorName}' states={transitionStates} "
+                f"exceeded={sensor['over_temp']} Celsius shutdown={sensor['shutdown_temp']} Celsius "
+                f"recovered={sensor['recovery_temp']} Celsius normal={sensor['normal_temp']} Celsius "
+                f"suppressionMs={suppressionMs}")
 
-        self.utilities.change_directory(self.hal_session, self.targetWorkspace)
+            self.utilities.change_directory(self.hal_session, self.targetWorkspace)
 
-        # Patch the YAML with TC2's shutdown sequence and suppression timeout before uploading to target.
-        self.updateTransitionStates(transitionStates, suppressionTimeoutMs=suppressionMs)
+            # Patch the YAML with TC2's shutdown sequence and suppression timeout before uploading to target.
+            self.updateTransitionStates(transitionStates, suppressionTimeoutMs=suppressionMs)
 
-        result = self.runL3Test(
-            "ThermalStateTransition",
-            triggerCallable=lambda: self._trigger(
-                sensorName, transitionStates, stateToTemp, suppressionMs),
-            triggerDelay=triggerDelay)
+            result = self.runL3Test(
+                "ThermalStateTransition",
+                triggerCallable=lambda: self._trigger(
+                    sensorName, transitionStates, stateToTemp, suppressionMs),
+                triggerDelay=triggerDelay)
 
-        result = result and self._verifyShutdownAndRecovery(sensor["reboot_wait_time"])
-        return result
+            result = result and self._verifyShutdownAndRecovery(sensor["reboot_wait_time"])
+            self.custom_reconnect(self.hal_session)
+            self.custom_reconnect(self.hal_session_1)
+            # TODO: Add boot reason validation using IBoot.getBootReason() in the unified repository.            overallResult = overallResult and result
+        return overallResult
 
 if __name__ == "__main__":
     summaryLogName = os.path.splitext(os.path.basename(__file__))[0] + "_summary"
