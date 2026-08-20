@@ -63,7 +63,7 @@ class VTS_THERMALSENSOR_L3_CriticalShutdownWithSuppression(thermalSensorHelperCl
         self.isUnifiedTest = False if moduleName is None else True
         super().__init__(self.testName, self.qcId, log, moduleName)
 
-    def _verifyShutdownAndRecovery(self, reboot_wait_time:int=900):
+    def _verifyShutdownAndRecovery(self, reboot_wait_time:int):
         """
         Verifies device recovery after a thermal shutdown event.
 
