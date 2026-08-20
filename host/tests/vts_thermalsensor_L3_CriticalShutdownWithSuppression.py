@@ -60,8 +60,8 @@ class VTS_THERMALSENSOR_L3_CriticalShutdownWithSuppression(thermalSensorHelperCl
     def __init__(self, log: logModule = None, moduleName: str = None):
         self.testName = "ThermalSensor_L3_CriticalShutdownWithSuppression"
         self.qcId = "2"
-        self.moduleName = moduleName
-        super().__init__(self.testName, self.qcId, log, self.moduleName)
+        self.isUnifiedTest = False if moduleName is None else True
+        super().__init__(self.testName, self.qcId, log, moduleName)
 
     def _verifyShutdownAndRecovery(self, reboot_wait_time:int=900):
         """
@@ -204,35 +204,6 @@ class VTS_THERMALSENSOR_L3_CriticalShutdownWithSuppression(thermalSensorHelperCl
         )
         return True
 
-    def custom_reconnect(self, session, retries=20, delay=1):
-        """Attempt to reconnect the SSH session with retries and delay."""
-        try:
-            if session.shell:
-                session.shell.close()
-        except Exception:
-            pass
-        try:
-            if session.console:
-                session.console.close()
-        except Exception:
-            pass
-        session.shell = None
-        session.console = None
-        session.is_open = False
-        for attempt in range(retries):
-            self.log.info(f"Reconnect attempt {attempt + 1}...")
-            try:
-                session.console = SSHClient()
-                session.console.set_missing_host_key_policy(paramiko.MissingHostKeyPolicy())
-                if session.open():
-                    session.open_interactive_shell()
-                    return True
-            except Exception as e:
-                self.log.step(f"Reconnect attempt {attempt + 1} failed: {e}")
-            time.sleep(delay)
-        self.log.error("Failed to reconnect after multiple attempts.")
-        return False
-
     def testFunction(self) -> bool:
         """
         Reads transition_states from the L3 YAML config and injection temperatures
@@ -290,9 +261,11 @@ class VTS_THERMALSENSOR_L3_CriticalShutdownWithSuppression(thermalSensorHelperCl
                 triggerDelay=triggerDelay)
 
             result = result and self._verifyShutdownAndRecovery(sensor["reboot_wait_time"])
-            self.custom_reconnect(self.hal_session)
-            self.custom_reconnect(self.hal_session_1)
-            # TODO: Add boot reason validation using IBoot.getBootReason() in the unified repository.            overallResult = overallResult and result
+            super().__init__(
+                self.testName,
+                self.qcId,
+                self.log,
+                self.moduleName if self.isUnifiedTest else None)            # TODO: Add boot reason validation using IBoot.getBootReason() in the unified repository.            overallResult = overallResult and result
         return overallResult
 
 if __name__ == "__main__":
