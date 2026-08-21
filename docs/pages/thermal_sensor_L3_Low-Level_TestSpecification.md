@@ -49,7 +49,7 @@ L3 tests require external stimulus injected by the Python host via the UT contro
 
 - High Level Test Specification — [thermal_sensor_High-Level_TestSpecification.md](thermal_sensor_High-Level_TestSpecification.md)
 - L3 YAML Configuration — [test_configuration/vts_l3_ThermalSensor.yaml](https://github.com/rdkcentral/rdk-halif-aidl-test-thermal-sensor/blob/main/test_configuration/vts_l3_ThermalSensor.yaml)
-- HFP Profile — [profiles/hfp-thermalsensor-vcomponent.yaml](https://github.com/rdkcentral/rdk-halif-aidl-test-thermal-sensor/blob/main/profiles/hfp-thermalsensor-vcomponent.yaml)
+- HFP Profile — [profiles/hfp-thermalsensor.yaml](https://github.com/rdkcentral/rdk-halif-aidl-test-thermal-sensor/blob/main/profiles/hfp-thermalsensor.yaml)
 - Thermal Sensor AIDL Interfaces:
   - [IThermalSensor](https://github.com/rdkcentral/rdk-halif-aidl/blob/main/sensor/current/com/rdk/hal/sensor/thermal/IThermalSensor.aidl)
   - [IThermalEventListener](https://github.com/rdkcentral/rdk-halif-aidl/blob/main/sensor/current/com/rdk/hal/sensor/thermal/IThermalEventListener.aidl)
