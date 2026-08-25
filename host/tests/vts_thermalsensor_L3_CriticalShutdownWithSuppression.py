@@ -63,7 +63,7 @@ class VTS_THERMALSENSOR_L3_CriticalShutdownWithSuppression(thermalSensorHelperCl
         self.isUnifiedTest = False if moduleName is None else True
         super().__init__(self.testName, self.qcId, log, moduleName)
 
-    def _verifyShutdownAndRecovery(self, reboot_wait_time:int):
+    def _verifyShutdownAndRecovery(self, shutdown_min_downtime_s:int, min_cooldown_seconds:int) -> bool:
         """
         Verifies device recovery after a thermal shutdown event.
 
@@ -77,38 +77,53 @@ class VTS_THERMALSENSOR_L3_CriticalShutdownWithSuppression(thermalSensorHelperCl
             - Refer to the thermal policy defined by expert engineering teams
               (not user-configurable).
         """
+        minDeviceBootTime_s = 120
         self.log.stepStart(
             f"Test Suit: VTS_L3_THERMALSENSOR  Test Case: {self.testName}: Verify for Device to shutdown")
-
-        shutdown_observed = self._waitForSsh(
-            self.hal_session.address,
-            self.hal_session.port,
-            reboot_wait_time,
-            False)
-
+        time.sleep(shutdown_min_downtime_s)
+        shutdown_observed = not self._waitForSsh(self.hal_session.address, self.hal_session.port)
         self.log.stepResult(
             shutdown_observed,
             f"Test Suit: VTS_L3_THERMALSENSOR  Test Case: {self.testName} Verified for Device to shutdown")
         if not shutdown_observed:
-            self.log.error("Unable to verify the device shutdown+ cool down period")
+            self.log.error("Unable to verify the device shutdown period")
             return False
-        #wait time for device to up
-        time.sleep(60)
+
+        # wait time for device to up
+        time.sleep(min_cooldown_seconds)
+
         self.log.stepStart(
-                f"Test Suit: VTS_L3_THERMALSENSOR  Test Case: {self.testName}: Verify for Device to reboot")
-        result = self._waitForSsh(
-             self.hal_session.address, self.hal_session.port, reboot_wait_time)
-        if not result:
-            if self.testUserResponse.getUserYN(
-                "Please boot the Target device. Has the device been booted and up? (Y/N):"):
-                result = self._waitForSsh(
-                    self.hal_session.address, self.hal_session.port, reboot_wait_time)
+                f"Test Suit: VTS_L3_THERMALSENSOR  Test Case: {self.testName}: Verify for Device to shutdown during cool down period")
+        shutdown_observed = not self._waitForSsh(self.hal_session.address, self.hal_session.port)
         self.log.stepResult(
-             result,
-             f"Test Suit: VTS_L3_THERMALSENSOR  Test Case: {self.testName} Verified for Device to reboot")
+            shutdown_observed,
+            f"Test Suit: VTS_L3_THERMALSENSOR  Test Case: {self.testName} Verified for Device to shutdown during cool down period")
+        if not shutdown_observed:
+            self.log.error("Unable to verify the shutdown device after shutdown time + cool down period")
+            return False
+
+        self.log.stepStart(
+                f"Test Suit: VTS_L3_THERMALSENSOR  Test Case: {self.testName}: User verification for device boot after shutdown + cool down period")
+        result =  self.testUserResponse.getUserYN(
+                "Please boot the Target device. Has the device been booted and up? (Y/N):")
+        self.log.stepResult(
+                result,
+                f"Test Suit: VTS_L3_THERMALSENSOR  Test Case: {self.testName} User verification for device boot after shutdown + cool down period")
         if not result:
-             self.log.error("Unable to verify the reboot after shutdown + cool down period")
+            self.log.error("Unable to verify the device boot after shutdown + cool down period")
+            return False
+
+        self.log.stepStart(
+                f"Test Suit: VTS_L3_THERMALSENSOR  Test Case: {self.testName}: Verify for ssh connection")
+        result = self._waitForSsh(
+                    self.hal_session.address, self.hal_session.port, minDeviceBootTime_s)
+        self.log.stepResult(
+                result,
+                f"Test Suit: VTS_L3_THERMALSENSOR  Test Case: {self.testName} Verified for ssh connection after shutdown + cool down period")
+        if not result:
+            self.log.error("Unable to verify the ssh connection after shutdown + cool down period")
         return result
+
 
     def _trigger(self, sensorName: str, transitionStates: list,
                  stateToTemp: dict, suppressionMs: int):
@@ -157,52 +172,49 @@ class VTS_THERMALSENSOR_L3_CriticalShutdownWithSuppression(thermalSensorHelperCl
 
             prevState = state
 
-    def _waitForSsh(self, host="127.0.0.1", port=7722, timeout=180, expectUp=True):
+    def _waitForSsh(self, host="127.0.0.1", port=7722, timeout=0):
         """
-        Wait for an SSH service to reach the expected state (up or down).
+        Wait for the SSH service to become reachable.
+
         Args:
             host (str): Hostname or IP address of the SSH server.
             port (int): SSH port to check.
             timeout (int): Maximum time to wait, in seconds.
-            expectUp (bool): Desired SSH state.
-                - True: Wait until SSH is reachable.
-                - False: Wait until SSH is unreachable.
 
         Returns:
-            bool: True if the SSH service reaches the expected state within the
-            timeout period, otherwise False.
+            bool: True if the SSH service becomes reachable within the timeout,
+                otherwise False.
         """
         end = time.time() + timeout
-        while time.time() < end:
+
+        while time.time() <= end:
             isUp = False
+            banner = ""
+
             try:
                 with socket.create_connection((host, port), timeout=2) as s:
                     s.settimeout(2)
                     banner = s.recv(1024).decode("utf-8", errors="ignore")
-                    # Some servers may not immediately send a banner; a successful
-                     # TCP connect is still a strong signal the service is up.
-                    isUp = banner.startswith("SSH-") if banner else True
-            except Exception as e:
-                self.log.debug(
-                     f"Waiting for SSH to be {'up' if expectUp else 'down'}... {e}")
-            if isUp == expectUp:
-                 if isUp:
-                     self.log.debug(f"SSH is up: {banner.strip() if banner else '<no banner>'}")
-                 else:
-                     self.log.debug("SSH is down")
-                 return True
-            time.sleep(1)
-        if expectUp:
-            self.log.error(
-                f"Timeout waiting for SSH to become up"
-            )
-            return False
 
-        # SSH remained down for the complete timeout.
-        self.log.debug(
-            f"SSH remained down for {timeout} seconds"
-        )
-        return True
+                    # A valid SSH banner confirms the service is SSH.
+                    # If no banner is received, a successful TCP connection
+                    # is still considered a strong signal that SSH is up.
+                    isUp = banner.startswith("SSH-") if banner else True
+
+            except Exception as e:
+                self.log.debug(f"Waiting for SSH to be up... {e}")
+
+            if isUp:
+                self.log.debug(
+                    f"SSH is up: {banner.strip() if banner else '<no banner>'}"
+                )
+                return True
+
+            self.log.debug(f"SSH is still down. Verifying until {timeout}")
+            time.sleep(1)
+
+        self.log.debug(f"SSH did not become available within {timeout} seconds")
+        return False
 
     def testFunction(self) -> bool:
         """
@@ -260,7 +272,7 @@ class VTS_THERMALSENSOR_L3_CriticalShutdownWithSuppression(thermalSensorHelperCl
                     sensorName, transitionStates, stateToTemp, suppressionMs),
                 triggerDelay=triggerDelay)
 
-            result = result and self._verifyShutdownAndRecovery(sensor["reboot_wait_time"])
+            result = result and self._verifyShutdownAndRecovery(sensor["shutdown_min_downtime_s"], sensor["min_cooldown_seconds"])
             super().__init__(
                 self.testName,
                 self.qcId,

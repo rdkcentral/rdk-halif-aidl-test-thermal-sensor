@@ -195,7 +195,8 @@ class thermalSensorHelperClass(utHelperClass):
                 # Using reading range midpoint would be BELOW recovered for both sensors.
                 'normal_temp':   (recovered + exceeded) / 2.0,
                 'safe_temp':     recovered - 10.0,
-                'reboot_wait_time': shutdown_min_downtime_s + min_cooldown_seconds,
+                'shutdown_min_downtime_s': shutdown_min_downtime_s,
+                'min_cooldown_seconds': min_cooldown_seconds,
             })
         return sensors
 
