@@ -77,19 +77,13 @@ INC_DIRS := $(HALIF_INC_DIRS)
 INC_DIRS += $(ROOT_DIR)/build/usr/include
 INC_DIRS += $(SRC_DIRS)
 
-XLDFLAGS := -L$(ROOT_DIR)/build/usr/lib
-XLDFLAGS += -Wl,-rpath-link=$(ROOT_DIR)/build/usr/lib -Wl,--export-dynamic -Wl,-rpath,.
+XLDFLAGS := -rdynamic
+XLDFLAGS += -L$(ROOT_DIR)/build/usr/lib
+XLDFLAGS += -Wl,-rpath-link=$(ROOT_DIR)/build/usr/lib
 XLDFLAGS += -L$(HALIF_LIB_DIR)
 XLDFLAGS += -Wl,-rpath-link=$(HALIF_LIB_DIR)
 XLDFLAGS += $(HALIF_MODULE_LIBS)
-ifeq ($(TARGET),arm)
-# ARM openssl is built by ut-core; add its lib dir before -lssl/-lcrypto so the
-# linker can resolve them (ut-control appends static paths, but they come after
-# the inherited -lssl/-lcrypto flags which would otherwise fail to resolve).
-XLDFLAGS += -L$(ROOT_DIR)/ut-core/framework/ut-control/build/$(TARGET)/openssl/lib
-XLDFLAGS += -Wl,-rpath-link=$(ROOT_DIR)/ut-core/framework/ut-control/build/$(TARGET)/openssl/lib
-endif
-XLDFLAGS += -lssl -lcrypto -lbinder -lutils
+XLDFLAGS += -lbinder -lutils
 
 # required for std::optional
 CXXFLAGS += -std=c++17

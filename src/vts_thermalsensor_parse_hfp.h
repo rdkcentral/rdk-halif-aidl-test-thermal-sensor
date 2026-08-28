@@ -39,7 +39,7 @@ using namespace com::rdk::hal::sensor::thermal;
  * @brief Per-sensor entry parsed from the HFP profile.
  *
  * Mirrors one element of the sensor.thermal list in
- * hfp-thermalsensor-vcomponent.yaml and covers all policy sections:
+ * hfp-thermalsensor.yaml and covers all policy sections:
  * sensor characteristics, operational range, trigger thresholds, and vendor.
  */
 typedef struct thermalSensorHFPSensor {

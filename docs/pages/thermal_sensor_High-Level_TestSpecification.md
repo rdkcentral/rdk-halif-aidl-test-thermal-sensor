@@ -62,7 +62,7 @@ Therefore, all functional and behavioral validation—including callback deliver
 | # | Testing Feature | Description | Expected Scenario |
 |---|----------------|------------|------------------|
 | 1 | Verify thermal exceed and recovery lifecycle with events and aggregation | Increase temperature beyond `critical_temperature_exceeded_celsius`, then reduce below `critical_temperature_recovered_celsius` while listeners are registered and multiple sensors are present, and verify that the emitted callback corresponds to the sensor reporting the highest‑severity thermal state | Device transitions `NORMAL` → `CRITICAL_TEMPERATURE_EXCEEDED` → `CRITICAL_TEMPERATURE_RECOVERED` → `NORMAL`; callbacks are delivered to registered listeners only on state changes; `timestampMonotonicMs` increases monotonically; getCurrentThermalState reflects the latest event state; when multiple sensors are present, the callback’s temperatureReading (if non‑null) corresponds to the sensor contributing the highest‑severity thermal state |
-| 2 | Verify critical shutdown trigger with events and suppression of recovery | Increase temperature beyond `entering_critical_shutdown_celsius` from normal operating range while listeners are registered | Device transitions `NORMAL` → `CRITICAL_TEMPERATURE_EXCEEDED` → `CRITICAL_SHUTDOWN_IMMINENT` and initiates controlled shutdown; shutdown event is delivered to listeners with monotonic timestamps; getCurrentThermalState reflects shutdown state; no recovery or normal events are emitted after shutdown |
+| 2 | Verify critical shutdown trigger with events and shutdown and verify device reboot after `shutdown_min_downtime_s + min_cooldown_seconds` period | Increase temperature beyond `entering_critical_shutdown_celsius` from normal operating range while listeners are registered | Device transitions `NORMAL` → `CRITICAL_TEMPERATURE_EXCEEDED` → `CRITICAL_SHUTDOWN_IMMINENT` and initiates controlled shutdown; shutdown event is delivered to listeners with monotonic timestamps; getCurrentThermalState reflects shutdown state; Verify that the device remains shut down for the `shutdown_min_downtime_s + min_cooldown_seconds time`; Verify the device reboot after the recovery time |
 
 ---
 
@@ -70,11 +70,6 @@ Therefore, all functional and behavioral validation—including callback deliver
 
 ### Thermal Threshold Ordering (Mandatory)
 `critical_temperature_recovered_celsius` < `critical_temperature_exceeded_celsius` < `entering_critical_shutdown_celsius`
-
-### Recovery Policy Requirements
-- `CRITICAL_TEMPERATURE_RECOVERED` is emitted only after temperature falls below the recovered threshold
-- Return to `NORMAL` must honor the configured recovery cooldown policy
-- Recovery timing must follow the YAML policy strategy for the triggering sensor
 
 ### Timestamp Requirements
 - Must be monotonic (not wall-clock time)
@@ -95,7 +90,7 @@ Therefore, all functional and behavioral validation—including callback deliver
 - Shutdown is triggered autonomously by HAL
 - Clients must not attempt to override or delay shutdown
 - Only minimal cleanup is allowed
-
+- Device shall remain in shutdown for `shutdown_min_downtime_s + min_cooldown_seconds`
 ---
 
 ## Conclusion

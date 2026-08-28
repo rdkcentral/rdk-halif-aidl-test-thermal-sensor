@@ -30,5 +30,5 @@ deviceConfig:
         prompt: "~#" # Prompt string on console
         wait_time: 240 # Configurable timeout value to limit the total duration of individual tests
         test:
-            profile: "../../profiles/hfp-thermalsensor-vcomponent.yaml" # HFP profile used to meet platform requirements
+            profile: "../../profiles/hfp-thermalsensor.yaml" # HFP profile used to meet platform requirements
             thermalsensor_controller_port: 8081 # Port where the vcomponent control plane is listening

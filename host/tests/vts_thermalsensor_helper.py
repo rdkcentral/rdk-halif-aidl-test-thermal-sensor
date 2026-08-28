@@ -89,7 +89,7 @@ class thermalSensorHelperClass(utHelperClass):
                     component_root, "test_configuration/vts_l3_ThermalSensor.yaml"
                 ).replace("\\", "/"),
                 "moduleHFPFile": os.path.join(
-                    component_root, "profiles/hfp-thermalsensor-vcomponent.yaml"
+                    component_root, "profiles/hfp-thermalsensor.yaml"
                 ).replace("\\", "/"),
             }
             artifactBaseDir = os.path.join(component_root, "host").replace("\\", "/")
@@ -165,22 +165,9 @@ class thermalSensorHelperClass(utHelperClass):
 
     def getSensorListFromHFP(self) -> list:
         """
-        Reads all thermal sensors from the HFP profile and returns a list of
-        sensor dicts with pre-computed injection temperatures.
-
-        Each dict contains:
-          name          - sensor name string
-          over_temp     - exceeded threshold + 2°C  (triggers EXCEEDED)
-          shutdown_temp - shutdown threshold + 2°C  (triggers SHUTDOWN_IMMINENT)
-          recovery_temp - recovered threshold - 2°C (triggers RECOVERED)
-          normal_temp   - midpoint of (recovered, exceeded] range, satisfying
-                          recovered < normal_temp <= exceeded so that a
-                          TEMPERATURE_UPDATE from RECOVERED state transitions
-                          the vcomponent to NORMAL
-          safe_temp     - recovered threshold - 10°C (secondary pre-warm)
-
-        Returns:
-            list: One dict per sensor in HFP profile order.
+        Reads thermal sensors from the HFP profile and returns a list of sensor
+        configurations with computed test temperatures based on the configured
+        recovery, exceeded, and shutdown thresholds.
         """
         with open(self.paths["moduleHFPFile"], 'r') as fh:
             hfp = yaml.safe_load(fh)
@@ -189,19 +176,27 @@ class thermalSensorHelperClass(utHelperClass):
         for s in hfp.get('sensor', {}).get('thermal', []):
             name      = str(s.get('sensorName', ''))
             triggers  = s.get('triggers', {})
+            policy = s.get('policy', {})
+            recovery = policy.get('recovery', {})
             exceeded  = float(triggers.get('critical_temperature_exceeded_celsius',  95.0))
             recovered = float(triggers.get('critical_temperature_recovered_celsius', 80.0))
             shutdown  = float(triggers.get('entering_critical_shutdown_celsius',     110.0))
+            shutdown_min_downtime_s = int(policy.get('shutdown_min_downtime_s', 60))
+            min_cooldown_seconds = int(recovery.get('min_cooldown_seconds', 60))
+            exceeded_margin  = (shutdown  - exceeded)  / 2.0
+            recovery_margin  = (exceeded  - recovered) / 2.0
             sensors.append({
                 'name':          name,
-                'over_temp':     exceeded  + 2.0,
-                'shutdown_temp': shutdown  + 2.0,
-                'recovery_temp': recovered - 2.0,
+                'over_temp':     exceeded  + exceeded_margin,
+                'shutdown_temp': shutdown  + exceeded_margin,
+                'recovery_temp': recovered - recovery_margin,
                 # normal_temp must satisfy: recovered < normal_temp <= exceeded
                 # so that TEMPERATURE_UPDATE from RECOVERED state transitions to NORMAL.
                 # Using reading range midpoint would be BELOW recovered for both sensors.
                 'normal_temp':   (recovered + exceeded) / 2.0,
                 'safe_temp':     recovered - 10.0,
+                'shutdown_min_downtime_s': shutdown_min_downtime_s,
+                'min_cooldown_seconds': min_cooldown_seconds,
             })
         return sensors
 
