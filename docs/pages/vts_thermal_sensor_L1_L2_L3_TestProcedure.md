@@ -126,7 +126,7 @@ cd /tmp/thermalsensor
 ### Run the VTS Test on Target Device
 
 ```bash
-./run.sh -p profiles/hfp-thermalsensor-vcomponent.yaml
+./run.sh -p profiles/hfp-thermalsensor.yaml
 ```
 
 ---
@@ -199,7 +199,7 @@ deviceConfig:
     prompt: "~#"
     wait_time: 240
     test:
-      profile: "../../profiles/hfp-thermalsensor-vcomponent.yaml"
+      profile: "../../profiles/hfp-thermalsensor.yaml"
       thermalsensor_controller_port: 8081
 ```
 
@@ -379,7 +379,7 @@ For real hardware testing:
 
 ### Hardware Feature Profile (HFP)
 
-The HFP file [profiles/hfp-thermalsensor-vcomponent.yaml](../../profiles/hfp-thermalsensor-vcomponent.yaml) defines platform-specific sensor capabilities and policy thresholds. Example:
+The HFP file [profiles/hfp-thermalsensor.yaml](../../profiles/hfp-thermalsensor.yaml) defines platform-specific sensor capabilities and policy thresholds. Example:
 
 ```yaml
 sensor:
