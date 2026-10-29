@@ -22,14 +22,13 @@ import yaml
 dir_path = os.path.dirname(os.path.realpath(__file__))
 sys.path.append(os.path.join(dir_path, "../"))
 sys.path.append(dir_path)
-sys.path.append(os.path.join(dir_path, "..", "raft"))
 
 from raft.framework.plugins.ut_raft.configRead import ConfigRead
 from raft.framework.plugins.ut_raft import utHelperClass
 from raft.framework.core.logModule import logModule
 from raft.framework.plugins.ut_raft.utSuiteNavigator import UTSuiteNavigatorClass
 from raft.framework.plugins.ut_raft.utBaseUtils import utBaseUtils
-from thermalController.ThermalSensorController import ThermalSensorController
+from rdk_raft.controller import Controller
 
 THERMALSENSOR_TEST_MENU_CONFIGURATION_FILE = os.path.join(
     dir_path, "vts_thermalsensor_testMenuConfiguration.yaml").replace("\\", "/")
@@ -139,7 +138,7 @@ class thermalSensorHelperClass(utHelperClass):
         self.utilities.change_directory(self.hal_session_1, self.targetWorkspace)
         time.sleep(2)
 
-        self.thermalSensorDevice = ThermalSensorController(
+        self.thermalSensorDevice = Controller.thermal_sensor(
             self.platform,
             self.hal_session_1,
             self.cpe.get("prompt"),
