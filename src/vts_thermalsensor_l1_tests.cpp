@@ -319,7 +319,7 @@ UT_ADD_TEST(VTS_L1_THERMALSENSOR, getCurrentTemperatures_pos)
         UT_ASSERT_TRUE(r.timestampMonotonicMs >= 0);
 
         UT_LOG_INFO("[L1 GetCurrentTemperatures] [%zu] sensor='%s' temp=%.2f timestampMs=%" PRId64,
-                    i, android::String8(r.sensorName).string(),
+                    i, r.sensorName.c_str(),
                     r.temperatureCelsius, r.timestampMonotonicMs);
     }
 }
