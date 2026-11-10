@@ -23,8 +23,7 @@ injections, with a secondary sensor held at a safe temperature:
              -> event.temperatureReading reflects primary (highest severity)
   Phase 1b : inject primary sensor at the same overTempCelsius again
              -> no event (idempotent; state already EXCEEDED)
-  Phase 2  : inject primary sensor at recoveryTempCelsius (<= criticalRecovered)
-    Phase 2  : inject primary sensor at normalTempCelsius (below recovery threshold)
+    Phase 2  : inject primary sensor at recoveryTempCelsius (below criticalRecovered)
                          -> NORMAL
 
 The Python host sends TEMPERATURE_UPDATE commands via the vcomponent control-plane.
@@ -134,7 +133,6 @@ class VTS_THERMALSENSOR_L3_ThermalExceedRecoveryLifecycle(thermalSensorHelperCla
         using that sensor as both primary and secondary.
 
         State-to-injection mapping (derived from HFP thresholds per primary):
-          NORMAL   -> inject primary at normal_temp  (midpoint of reading range)
           CRITICAL_TEMPERATURE_EXCEEDED -> inject primary at over_temp    (exceeded threshold + 2°C)
           NORMAL after EXCEEDED -> inject primary at recovery_temp (recovered threshold - 2°C)
 
@@ -171,7 +169,7 @@ class VTS_THERMALSENSOR_L3_ThermalExceedRecoveryLifecycle(thermalSensorHelperCla
         # Map state name -> injection temperature key in the sensor dict
         stateToTempKey = {
             'CRITICAL_TEMPERATURE_EXCEEDED':  'over_temp',
-            'NORMAL':                         'normal_temp',
+            'NORMAL':                         'recovery_temp',
         }
 
         triggerDelay = (timeoutMs / 1000.0) / 2.0
