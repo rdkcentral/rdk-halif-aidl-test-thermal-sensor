@@ -195,6 +195,8 @@ UT_ADD_TEST(VTS_L3_THERMALSENSOR, ThermalStateTransition)
             UT_ASSERT_TRUE(mListener->getNextEvent(ev, waitMs));
             UT_ASSERT_EQUAL(ev.state, expectedState);
             UT_ASSERT_TRUE(ev.timestampMonotonicMs > lastTs);
+            UT_ASSERT_TRUE(ev.temperatureReading.has_value());
+            UT_ASSERT_TRUE(ev.temperatureReading->sensorName.size() > 0);
             lastTs = ev.timestampMonotonicMs;
 
             UT_LOG_INFO("[L3 ThermalStateTransition] step %zu OK: state=%s ts=%lld",

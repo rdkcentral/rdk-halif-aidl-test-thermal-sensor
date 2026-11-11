@@ -40,6 +40,7 @@
 #include "vts_thermalsensor_parse_hfp.h"
 #include "vts_thermalsensor.h"
 #include <inttypes.h>
+#include <unordered_set>
 
 using namespace std;
 using namespace com::rdk::hal::sensor::thermal;
@@ -293,34 +294,67 @@ UT_ADD_TEST(VTS_L1_THERMALSENSOR, getCurrentThermalState_pos)
  * | Variation / Step | Description | Test Data | Expected Result | Notes |@n
  * | :----: | --------- | ---------- |-------------- | ----- |@n
  * | 01 | Call getCurrentTemperatures() and capture the returned readings vector and status. | input: none | Returns status OK and a non-empty readings vector | Should Pass |@n
- * | 02 | For each TemperatureReading assert sensorName is not empty. | each reading.sensorName | sensorName length > 0 | Should Pass |@n
- * | 03 | For each TemperatureReading assert temperatureCelsius is above absolute zero (-273.15 °C). | each reading.temperatureCelsius | temperatureCelsius >= -273.15 | Should Pass |@n
- * | 04 | For each TemperatureReading assert timestampMonotonicMs is >= 0. | each reading.timestampMonotonicMs | timestampMonotonicMs >= 0 | Should Pass |@n
+ * | 02 | Assert the number of readings matches the HFP sensor count. | readings and HFP sensors | Counts are equal | Should Pass |@n
+ * | 03 | For each TemperatureReading assert sensorName uniquely identifies an HFP sensor and location matches that sensor's HFP location. | each reading.sensorName and location | Unique, exact HFP match | Should Pass |@n
+ * | 04 | For each TemperatureReading assert temperatureCelsius is within that sensor's HFP measurable range. | each reading.temperatureCelsius and HFP range | min <= temperatureCelsius <= max | Should Pass |@n
+ * | 05 | For each TemperatureReading assert timestampMonotonicMs is >= 0. | each reading.timestampMonotonicMs | timestampMonotonicMs >= 0 | Should Pass |@n
+ * | 06 | For each TemperatureReading assert vendorCode and vendorInfo match that sensor's HFP metadata. | each reading vendor metadata | Exact HFP match | Should Pass |@n
  */
 UT_ADD_TEST(VTS_L1_THERMALSENSOR, getCurrentTemperatures_pos)
 {
     std::vector<TemperatureReading> readings;
-    THERMALSENSOR_GET_TEMPERATURES(gTHERMALSENSORHandle, readings);
+    UT_LOG_INFO("[L1 GetCurrentTemperatures] Calling API; HFP expects %zu sensor(s)",
+                gThermalSensorHFP.sensors.size());
+
+    const ::android::binder::Status status =
+        gTHERMALSENSORHandle->getCurrentTemperatures(&readings);
+    UT_LOG_INFO("[L1 GetCurrentTemperatures] API returned: isOk=%d exceptionCode=%d "
+                "transactionError=%d message='%s' readings=%zu",
+                status.isOk(), status.exceptionCode(), status.transactionError(),
+                status.toString8().c_str(), readings.size());
+    UT_ASSERT_TRUE(status.isOk());
+    UT_ASSERT_EQUAL(status.exceptionCode(), Status::EX_NONE);
 
     /* Step 1: readings vector must not be empty */
     UT_ASSERT_TRUE(readings.size() > 0);
 
+    /* Step 2: every HFP sensor must have one returned reading */
+    UT_ASSERT_EQUAL(readings.size(), gThermalSensorHFP.sensors.size());
+
+    std::unordered_set<std::string> seenSensorNames;
     for (size_t i = 0; i < readings.size(); ++i)
     {
         const TemperatureReading& r = readings[i];
 
-        /* Step 2: sensorName must not be empty */
+        /* Step 3: sensorName and location must match the HFP entry */
+        UT_LOG_INFO("[L1 GetCurrentTemperatures] actual[%zu]: sensor='%s' location='%s' "
+                "temp=%.2f timestampMs=%" PRId64 " vendorCode=%d vendorInfo='%s'",
+                i, r.sensorName.c_str(), r.location.c_str(), r.temperatureCelsius,
+                r.timestampMonotonicMs, r.vendorCode, r.vendorInfo.c_str());
         UT_ASSERT_TRUE(r.sensorName.size() > 0);
+        UT_ASSERT_TRUE(seenSensorNames.insert(r.sensorName.c_str()).second);
+        const thermalSensorHFPSensor_t* hfpSensor = getHFPSensorByName(r.sensorName.c_str());
+        UT_ASSERT_TRUE(hfpSensor != nullptr);
+        UT_LOG_INFO("[L1 GetCurrentTemperatures] expected[%zu]: sensor='%s' location='%s' "
+                "range=[%.2f, %.2f] vendorCode=%d vendorInfo='%s'",
+                i, hfpSensor->sensorName.c_str(), hfpSensor->location.c_str(),
+                hfpSensor->sensorReadingMinCelsius, hfpSensor->sensorReadingMaxCelsius,
+                hfpSensor->vendorCode, hfpSensor->vendorInfo.c_str());
+        UT_ASSERT_TRUE(r.location.size() > 0);
+        UT_ASSERT_TRUE(hfpSensor->location == r.location.c_str());
 
-        /* Step 3: temperatureCelsius must be above absolute zero */
-        UT_ASSERT_TRUE(r.temperatureCelsius >= -273.15);
+        /* Step 4: temperatureCelsius must be within the sensor's measurable range */
+        UT_ASSERT_TRUE(r.temperatureCelsius >= hfpSensor->sensorReadingMinCelsius);
+        UT_ASSERT_TRUE(r.temperatureCelsius <= hfpSensor->sensorReadingMaxCelsius);
 
-        /* Step 4: timestampMonotonicMs must be >= 0 */
+        /* Step 5: timestampMonotonicMs must be >= 0 */
         UT_ASSERT_TRUE(r.timestampMonotonicMs >= 0);
 
-        UT_LOG_INFO("[L1 GetCurrentTemperatures] [%zu] sensor='%s' temp=%.2f timestampMs=%" PRId64,
-                    i, android::String8(r.sensorName).string(),
-                    r.temperatureCelsius, r.timestampMonotonicMs);
+        /* Step 6: vendor metadata must match the HFP entry */
+        UT_ASSERT_EQUAL(r.vendorCode, hfpSensor->vendorCode);
+        UT_ASSERT_TRUE(hfpSensor->vendorInfo == r.vendorInfo.c_str());
+
+        UT_LOG_INFO("[L1 GetCurrentTemperatures] reading[%zu] validation passed", i);
     }
 }
 
