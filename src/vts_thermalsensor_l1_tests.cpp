@@ -306,14 +306,7 @@ UT_ADD_TEST(VTS_L1_THERMALSENSOR, getCurrentTemperatures_pos)
     UT_LOG_INFO("[L1 GetCurrentTemperatures] Calling API; HFP expects %zu sensor(s)",
                 gThermalSensorHFP.sensors.size());
 
-    const ::android::binder::Status status =
-        gTHERMALSENSORHandle->getCurrentTemperatures(&readings);
-    UT_LOG_INFO("[L1 GetCurrentTemperatures] API returned: isOk=%d exceptionCode=%d "
-                "transactionError=%d message='%s' readings=%zu",
-                status.isOk(), status.exceptionCode(), status.transactionError(),
-                status.toString8().c_str(), readings.size());
-    UT_ASSERT_TRUE(status.isOk());
-    UT_ASSERT_EQUAL(status.exceptionCode(), Status::EX_NONE);
+    THERMALSENSOR_GET_TEMPERATURES(gTHERMALSENSORHandle, readings);
 
     /* Step 1: readings vector must not be empty */
     UT_ASSERT_TRUE(readings.size() > 0);
@@ -334,7 +327,7 @@ UT_ADD_TEST(VTS_L1_THERMALSENSOR, getCurrentTemperatures_pos)
         UT_ASSERT_TRUE(r.sensorName.size() > 0);
         UT_ASSERT_TRUE(seenSensorNames.insert(r.sensorName.c_str()).second);
         const thermalSensorHFPSensor_t* hfpSensor = getHFPSensorByName(r.sensorName.c_str());
-        UT_ASSERT_TRUE(hfpSensor != nullptr);
+        UT_ASSERT_EQUAL_FATAL(hfpSensor != nullptr, true);
         UT_LOG_INFO("[L1 GetCurrentTemperatures] expected[%zu]: sensor='%s' location='%s' "
                 "range=[%.2f, %.2f] vendorCode=%d vendorInfo='%s'",
                 i, hfpSensor->sensorName.c_str(), hfpSensor->location.c_str(),
