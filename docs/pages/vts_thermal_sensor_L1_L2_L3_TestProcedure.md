@@ -64,7 +64,7 @@ Example:
 ```bash
 export UT_LOG_LEVEL=4
 export UT_CORE_VERSION=5.1.0
-export RDK_HALIF_AIDL_VERSION=develop
+export RDK_HALIF_AIDL_VERSION=0.23.0
 ```
 
 Enable UT logs (optional):
