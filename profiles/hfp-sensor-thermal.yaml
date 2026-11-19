@@ -47,7 +47,7 @@ sensor:
 
       # operational_temperature_celsius:
       #   Normal safe operating envelope for the platform under steady-state load.
-      #   Middleware should regard this as the “normal zone”.
+      #   Middleware should regard this as the "normal zone".
       #   Anything above the max here enters mitigation or alarm territory.
       operational_temperature_celsius:
         min: -20
