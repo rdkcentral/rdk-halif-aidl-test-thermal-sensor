@@ -88,7 +88,7 @@ class thermalSensorHelperClass(utHelperClass):
                     component_root, "test_configuration/vts_l3_ThermalSensor.yaml"
                 ).replace("\\", "/"),
                 "moduleHFPFile": os.path.join(
-                    component_root, "profiles/hfp-thermalsensor.yaml"
+                    component_root, "profiles/hfp-sensor-thermal.yaml"
                 ).replace("\\", "/"),
             }
             artifactBaseDir = os.path.join(component_root, "host").replace("\\", "/")
