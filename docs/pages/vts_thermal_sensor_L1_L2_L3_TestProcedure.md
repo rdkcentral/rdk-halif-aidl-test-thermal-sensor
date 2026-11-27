@@ -64,7 +64,7 @@ Example:
 ```bash
 export UT_LOG_LEVEL=4
 export UT_CORE_VERSION=5.1.0
-export RDK_HALIF_AIDL_VERSION=0.22.0
+export RDK_HALIF_AIDL_VERSION=0.23.0
 ```
 
 Enable UT logs (optional):
@@ -126,7 +126,7 @@ cd /tmp/thermalsensor
 ### Run the VTS Test on Target Device
 
 ```bash
-./run.sh -p profiles/hfp-thermalsensor.yaml
+./run.sh -p profiles/hfp-sensor-thermal.yaml
 ```
 
 ---
@@ -199,7 +199,7 @@ deviceConfig:
     prompt: "~#"
     wait_time: 240
     test:
-      profile: "../../profiles/hfp-thermalsensor.yaml"
+      profile: "../../profiles/hfp-sensor-thermal.yaml"
       thermalsensor_controller_port: 8081
 ```
 
@@ -245,7 +245,7 @@ python host/tests/<L3-test-case>.py \
 
 #### Purpose
 
-Validates end-to-end thermal state transition lifecycle driven by raw temperature injections. Confirms that `onThermalStateChange` events are delivered for each configured transition (`NORMAL → CRITICAL_TEMPERATURE_EXCEEDED → CRITICAL_TEMPERATURE_RECOVERED → NORMAL`), that timestamps are monotonically increasing, and that `getCurrentThermalState()` is consistent with each delivered event.
+Validates end-to-end thermal state transition lifecycle driven by raw temperature injections. Confirms that `onThermalStateChange` events are delivered for each configured transition (`NORMAL → CRITICAL_TEMPERATURE_EXCEEDED → NORMAL`), that timestamps are monotonically increasing, each event identifies the changed sensor, and that `getCurrentThermalState()` is consistent with each delivered event.
 
 When the HFP profile declares N > 1 sensors, the test runs for every `(primary, secondary)` sensor permutation (`i ≠ j`). Before each sequence, the secondary sensor is pre-warmed to a safe temperature (`recovered_threshold − 10°C`) to avoid cross-sensor interference. For a single-sensor profile the sensor is used as both primary and secondary.
 
@@ -379,7 +379,7 @@ For real hardware testing:
 
 ### Hardware Feature Profile (HFP)
 
-The HFP file [profiles/hfp-thermalsensor.yaml](../../profiles/hfp-thermalsensor.yaml) defines platform-specific sensor capabilities and policy thresholds. Example:
+The HFP file [profiles/hfp-sensor-thermal.yaml](../../profiles/hfp-sensor-thermal.yaml) defines platform-specific sensor capabilities and policy thresholds. Example:
 
 ```yaml
 sensor:
